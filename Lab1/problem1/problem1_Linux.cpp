@@ -1,11 +1,14 @@
 #include <iostream>
 #include <sys/time.h>
 using namespace std;
-const int N = 10000;
-int a[N];
-int b[N][N];
-int sum[N];
-int LOOP = 1;
+
+#define ull unsigned long long int 
+
+const int N = 80;
+ull a[N];
+ull b[N][N];
+ull sum[N];
+int LOOP = 1000;
 
 void init()
 {
@@ -24,11 +27,10 @@ void ordinary()
     for(int l=0;l<LOOP;l++)
     {
         for(int i=0;i<N;i++)
-        {
             sum[i]=0;
+        for(int i=0;i<N;i++)
             for(int j=0;j<N;j++)
                 sum[i]+=a[j]*b[j][i];
-        }
     }
     gettimeofday(&end,NULL);
     cout<<"ordinary:"<<((end.tv_sec-start.tv_sec)*1000000+(end.tv_usec-start.tv_usec))*1.0/1000/LOOP<<"ms"<<endl;
@@ -45,7 +47,7 @@ void optimize()
             sum[i]=0;
         for(int j=0;j<N;j++)
             for(int i=0;i<N;i++)
-                sum[i]+=a[j]*b[j][i];
+                sum[i]+=b[j][i]*a[j];
     }
     gettimeofday(&end,NULL);
     cout<<"optimize:"<<((end.tv_sec-start.tv_sec)*1000000+(end.tv_usec-start.tv_usec))*1.0/1000/LOOP<<"ms"<<endl;

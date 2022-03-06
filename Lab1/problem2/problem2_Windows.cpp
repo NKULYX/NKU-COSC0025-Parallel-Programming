@@ -4,7 +4,7 @@ using namespace std;
 
 #define ull unsigned long long int
 
-const ull N = 33554432;
+const ull N = 1024;
 ull a[N];
 int LOOP = 1;
 
@@ -45,7 +45,6 @@ void optimize()
     QueryPerformanceCounter((LARGE_INTEGER*) &end);
     cout<<"optimize:"<<(end-begin)*1000.0/freq/LOOP<<"ms"<<endl;
 }
-
 
 int main()
 {

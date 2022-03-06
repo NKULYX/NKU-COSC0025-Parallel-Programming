@@ -4,7 +4,7 @@ using namespace std;
 
 #define ull unsigned long long int
 
-const ull N = 33554432;
+const ull N = 67108864;
 ull a[N];
 int LOOP = 1;
 
@@ -23,8 +23,8 @@ void ordinary()
     {
         // init();
         ull sum = 0;
-        for (int i = 0; i < N; i++)
-            sum += a[i];
+        for (int i = 0; i < N - 1; i+=2)
+            sum += a[i], sum += a[i+1]; 
     }
     gettimeofday(&end,NULL);
     cout<<"ordinary:"<<((end.tv_sec-start.tv_sec)*1000000+(end.tv_usec-start.tv_usec))*1.0/1000/LOOP<<"ms"<<endl;
