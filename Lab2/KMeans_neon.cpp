@@ -2,7 +2,7 @@
 #include <sys/time.h>
 #include <arm_neon.h>
 
-const int N = 10000;
+const int N = 4*4*4*4*4*4*4*4;
 const int D = 2;
 const int K = 4;
 const int L = 100;
