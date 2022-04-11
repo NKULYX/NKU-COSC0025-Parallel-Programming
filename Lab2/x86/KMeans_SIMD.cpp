@@ -10,7 +10,7 @@
 using namespace std;
 
 const int N = 16 * 16 * 16;
-const int D = 16 * 16 * 16;
+const int D = 16 * 16 * 16 * 16;
 const int K = 4;
 const int L = 100;
 const int LOOP = 1;
