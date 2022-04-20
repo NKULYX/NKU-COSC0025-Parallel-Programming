@@ -1,8 +1,14 @@
 #include <iostream>
 #include <sys/time.h>
-#include <arm_neon.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <xmmintrin.h>  //SSE
+#include <emmintrin.h>  //SSE2
+#include <pmmintrin.h> //SSE3
+#include <tmmintrin.h>  //SSSE3
+#include <smmintrin.h> //SSE4.1
+#include <nmmintrin.h>  //SSSE4.2
+#include <immintrin.h> //AVX、AVX2、AVX-512
 using namespace std;
 
 //------------------------------------------ 线程控制变量 ------------------------------------------
@@ -14,20 +20,21 @@ typedef struct
 sem_t sem_Division;
 sem_t sem_Elimination;
 
-const int THREAD_NUM = 8;
+const int THREAD_NUM = 7;
 
 // ------------------------------------------ 全局计算变量 ------------------------------------------
-const int N = 100;
+const int N = 2000;
 const int L = 100;
-const int LOOP = 100;
+const int LOOP = 1;
 float data[N][N];
 float matrix[N][N];
 
 void init_data();
 void init_matrix();
 void calculate_serial();
-void calculate_neon();
+void calculate_SSE();
 void calculate_pthread();
+void print_matrix();
 
 int main()
 {
@@ -52,11 +59,11 @@ int main()
     {
         init_matrix();
         gettimeofday(&start, NULL);
-        calculate_neon();
+        calculate_SSE();
         gettimeofday(&end, NULL);
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
-    cout << "neon:" << time / LOOP << "ms" << endl;
+    cout << "SSE:" << time / LOOP << "ms" << endl;
     // ====================================== pthread ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -68,7 +75,9 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "pthread:" << time / LOOP << "ms" << endl;
+    system("pause");
 }
+
 
 // 初始化data，保证每次数据都是一致的
 void init_data()
@@ -111,42 +120,53 @@ void calculate_serial()
     }
 }
 
-// neon并行算法
-void calculate_neon()
+// SSE并行算法
+void calculate_SSE()
 {
     for (int k = 0; k < N; k++)
-    {
-        float32x4_t Akk = vmovq_n_f32(matrix[k][k]);
-        int j;
-        for (j = k + 1; j + 3 < N; j += 4)
-        {
-            float32x4_t Akj = vld1q_f32(matrix[k] + j);
-            Akj = vdivq_f32(Akj, Akk);
-            vst1q_f32(matrix[k] + j, Akj);
-        }
-        for (; j < N; j++)
-        {
-            matrix[k][j] = matrix[k][j] / matrix[k][k];
-        }
-        matrix[k][k] = 1;
-        for (int i = k + 1; i < N; i++)
-        {
-            float32x4_t Aik = vmovq_n_f32(matrix[i][k]);
-            for (j = k + 1; j + 3 < N; j += 4)
-            {
-                float32x4_t Akj = vld1q_f32(matrix[k] + j);
-                float32x4_t Aij = vld1q_f32(matrix[i] + j);
-                float32x4_t AikMulAkj = vmulq_f32(Aik, Akj);
-                Aij = vsubq_f32(Aij, AikMulAkj);
-                vst1q_f32(matrix[i] + j, Aij);
-            }
-            for (; j < N; j++)
-            {
-                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
-            }
-            matrix[i][k] = 0;
-        }
-    }
+	{
+		// float Akk = matrix[k][k];
+		__m128 Akk = _mm_set_ps1(matrix[k][k]);
+		int j;
+		//考虑对齐操作
+		for (j = k + 1; j + 3 < N; j += 4)
+		{
+			//float Akj = matrix[k][j];
+			__m128 Akj = _mm_loadu_ps(matrix[k] + j);
+			// Akj = Akj / Akk;
+			Akj = _mm_div_ps(Akj, Akk);
+			//Akj = matrix[k][j];
+			_mm_storeu_ps(matrix[k] + j, Akj);
+		}
+		for (; j < N; j++)
+		{
+			matrix[k][j] = matrix[k][j] / matrix[k][k];
+		}
+		matrix[k][k] = 1;
+		for (int i = k + 1; i < N; i++)
+		{
+			// float Aik = matrix[i][k];
+			__m128 Aik = _mm_set_ps1(matrix[i][k]);
+			for (j = k + 1; j + 3 < N; j += 4)
+			{
+				//float Akj = matrix[k][j];
+				__m128 Akj = _mm_loadu_ps(matrix[k] + j);
+				//float Aij = matrix[i][j];
+				__m128 Aij = _mm_loadu_ps(matrix[i] + j);
+				// AikMulAkj = matrix[i][k] * matrix[k][j];
+				__m128 AikMulAkj = _mm_mul_ps(Aik, Akj);
+				// Aij = Aij - AikMulAkj;
+				Aij = _mm_sub_ps(Aij, AikMulAkj);
+				//matrix[i][j] = Aij;
+				_mm_storeu_ps(matrix[i] + j, Aij);
+			}
+			for (; j < N; j++)
+			{
+				matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+			}
+			matrix[i][k] = 0;
+		}
+	}
 }
 
 
@@ -182,21 +202,27 @@ void *threadFunc(void *param)
         // 循环划分任务
         for (int i = k + 1 + t_id; i < N; i += THREAD_NUM)
         {
+            // float Aik = matrix[i][k];
+			__m128 Aik = _mm_set_ps1(matrix[i][k]);
             int j = k + 1 + t_id;
-            float32x4_t Aik = vmovq_n_f32(matrix[i][k]);
-            for (j = k + 1; j + 3 < N; j += 4)
-            {
-                float32x4_t Akj = vld1q_f32(matrix[k] + j);
-                float32x4_t Aij = vld1q_f32(matrix[i] + j);
-                float32x4_t AikMulAkj = vmulq_f32(Aik, Akj);
-                Aij = vsubq_f32(Aij, AikMulAkj);
-                vst1q_f32(matrix[i] + j, Aij);
-            }
-            for (; j < N; j++)
-            {
-                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
-            }
-            matrix[i][k] = 0;
+			for (; j + 3 < N; j += 4)
+			{
+				//float Akj = matrix[k][j];
+				__m128 Akj = _mm_loadu_ps(matrix[k] + j);
+				//float Aij = matrix[i][j];
+				__m128 Aij = _mm_loadu_ps(matrix[i] + j);
+				// AikMulAkj = matrix[i][k] * matrix[k][j];
+				__m128 AikMulAkj = _mm_mul_ps(Aik, Akj);
+				// Aij = Aij - AikMulAkj;
+				Aij = _mm_sub_ps(Aij, AikMulAkj);
+				//matrix[i][j] = Aij;
+				_mm_storeu_ps(matrix[i] + j, Aij);
+			}
+			for (; j < N; j++)
+			{
+				matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+			}
+			matrix[i][k] = 0;
         }
 
         // 所有线程进入下一轮
