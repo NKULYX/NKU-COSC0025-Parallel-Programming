@@ -129,7 +129,7 @@ void calculate_SSE()
 		// float Akk = matrix[k][k];
 		__m128 Akk = _mm_set_ps1(matrix[k][k]);
 		int j;
-		//考虑对齐操作
+		// 并行处理
 		for (j = k + 1; j + 3 < N; j += 4)
 		{
 			//float Akj = matrix[k][j];
@@ -139,6 +139,7 @@ void calculate_SSE()
 			//Akj = matrix[k][j];
 			_mm_storeu_ps(matrix[k] + j, Akj);
 		}
+        // 串行处理结尾
 		for (; j < N; j++)
 		{
 			matrix[k][j] = matrix[k][j] / matrix[k][k];
@@ -161,6 +162,7 @@ void calculate_SSE()
 				//matrix[i][j] = Aij;
 				_mm_storeu_ps(matrix[i] + j, Aij);
 			}
+            // 串行处理结尾
 			for (; j < N; j++)
 			{
 				matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
