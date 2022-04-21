@@ -23,7 +23,7 @@ pthread_barrier_t barrier;
 const int THREAD_NUM = 8;
 
 // ------------------------------------------ 全局计算变量 ------------------------------------------
-const int N = 10;
+const int N = 20;
 const int L = 100;
 const int LOOP = 1;
 float data[N][N];
@@ -33,7 +33,8 @@ void init_data();
 void init_matrix();
 void calculate_serial();
 void calculate_SSE();
-void calculate_pthread();
+void calculate_pthread_SSE();
+void calculate_pthread_AVX();
 void print_matrix();
 
 int main()
@@ -64,17 +65,29 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "SSE:" << time / LOOP << "ms" << endl;
-    // ====================================== pthread ======================================
+    // ====================================== pthread_SSE ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
     {
         init_matrix();
         gettimeofday(&start, NULL);
-        calculate_pthread();
+        calculate_pthread_SSE();
         gettimeofday(&end, NULL);
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
-    cout << "pthread:" << time / LOOP << "ms" << endl;
+    cout << "pthread_SSE:" << time / LOOP << "ms" << endl;
+    print_matrix();
+    // ====================================== pthread_AVX ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++)
+    {
+        init_matrix();
+        gettimeofday(&start, NULL);
+        calculate_pthread_AVX();
+        gettimeofday(&end, NULL);
+        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    }
+    cout << "pthread_AVX:" << time / LOOP << "ms" << endl;
     print_matrix();
     system("pause");
 }
@@ -172,8 +185,8 @@ void calculate_SSE()
 	}
 }
 
-
-void *threadFunc(void *param)
+// pthread_SSE 线程函数
+void *threadFunc_SSE(void *param)
 {
     threadParam_t *thread_param_t = (threadParam_t *)param;
     int t_id = thread_param_t->t_id;
@@ -250,8 +263,8 @@ void *threadFunc(void *param)
     return NULL;
 }
 
-// pthread并行算法
-void calculate_pthread()
+// pthread_SSE 并行算法
+void calculate_pthread_SSE()
 {
     // 信号量初始化
     sem_init(&sem_Division, 0, 0);
@@ -264,7 +277,113 @@ void calculate_pthread()
     for (int i = 0; i < THREAD_NUM; i++)
     {
         thread_param_t[i].t_id = i;
-        pthread_create(&threads[i], NULL, threadFunc, (void *)(&thread_param_t[i]));
+        pthread_create(&threads[i], NULL, threadFunc_SSE, (void *)(&thread_param_t[i]));
+    }
+
+    // 加入执行线程
+    for (int i = 0; i < THREAD_NUM; i++)
+    {
+        pthread_join(threads[i], NULL);
+    }
+
+    // 销毁信号量
+    sem_destroy(&sem_Division);
+    pthread_barrier_destroy(&barrier);
+}
+
+// pthread_AVX 线程函数
+void *threadFunc_AVX(void *param)
+{
+    threadParam_t *thread_param_t = (threadParam_t *)param;
+    int t_id = thread_param_t->t_id;
+    for (int k = 0; k < N; k++)
+    {
+        // 如果当前是0号线程，则进行除法操作，其余线程处于等待状态
+        if (t_id == 0)
+        {
+            // float Akk = matrix[k][k];
+            __m256 Akk = _mm256_set1_ps(matrix[k][k]);
+            int j;
+            //考虑对齐操作
+            for (j = k + 1; j + 7 < N; j += 8)
+            {
+                //float Akj = matrix[k][j];
+                __m256 Akj = _mm256_loadu_ps(matrix[k] + j);
+                // Akj = Akj / Akk;
+                Akj = _mm256_div_ps(Akj, Akk);
+                //Akj = matrix[k][j];
+                _mm256_storeu_ps(matrix[k] + j, Akj);
+            }
+            for (; j < N; j++)
+            {
+                matrix[k][j] = matrix[k][j] / matrix[k][k];
+            }
+            matrix[k][k] = 1.0;
+        }
+        else
+        {
+            sem_wait(&sem_Division);
+        }
+
+        // 除法操作完成后，如果是0号线程，则需要唤醒其他线程
+        if (t_id == 0)
+        {
+            for (int i = 1; i < THREAD_NUM; i++)
+            {
+                sem_post(&sem_Division);
+            }
+        }
+        else
+        {
+            // 循环划分任务
+            for (int i = k + t_id; i < N; i += (THREAD_NUM - 1))
+            {
+                // float Aik = matrix[i][k];
+                __m256 Aik = _mm256_set1_ps(matrix[i][k]);
+                int j = k + 1;
+                for (; j + 7 < N; j += 8)
+                {
+                    //float Akj = matrix[k][j];
+                    __m256 Akj = _mm256_loadu_ps(matrix[k] + j);
+                    //float Aij = matrix[i][j];
+                    __m256 Aij = _mm256_loadu_ps(matrix[i] + j);
+                    // AikMulAkj = matrix[i][k] * matrix[k][j];
+                    __m256 AikMulAkj = _mm256_mul_ps(Aik, Akj);
+                    // Aij = Aij - AikMulAkj;
+                    Aij = _mm256_sub_ps(Aij, AikMulAkj);
+                    //matrix[i][j] = Aij;
+                    _mm256_storeu_ps(matrix[i] + j, Aij);
+                }
+                for (; j < N; j++)
+                {
+                    matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+                }
+                matrix[i][k] = 0;
+            }
+        }
+
+        // 所有线程准备进入下一轮
+        pthread_barrier_wait(&barrier);
+    }
+    pthread_exit(NULL);
+    return NULL;
+}
+
+// pthread_AVX 并行算法
+void calculate_pthread_AVX()
+{
+    // 信号量初始化
+    sem_init(&sem_Division, 0, 0);
+    pthread_barrier_init(&barrier,NULL,THREAD_NUM);
+
+
+    // 创建线程
+    pthread_t threads[THREAD_NUM];
+    threadParam_t thread_param_t[THREAD_NUM];
+    for (int i = 0; i < THREAD_NUM; i++)
+    {
+        thread_param_t[i].t_id = i;
+        pthread_create(&threads[i], NULL, threadFunc_AVX, (void *)(&thread_param_t[i]));
     }
 
     // 加入执行线程
