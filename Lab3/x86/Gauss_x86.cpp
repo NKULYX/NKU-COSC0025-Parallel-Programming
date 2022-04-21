@@ -34,6 +34,7 @@ void init_matrix();
 void calculate_serial();
 void calculate_SSE();
 void calculate_pthread_SSE();
+void calculate_AVX();
 void calculate_pthread_AVX();
 void print_matrix();
 
@@ -54,7 +55,7 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "serial:" << time / LOOP << "ms" << endl;
-    // ====================================== neon ======================================
+    // ====================================== SSE ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
     {
@@ -76,7 +77,17 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "pthread_SSE:" << time / LOOP << "ms" << endl;
-    print_matrix();
+    // ====================================== AVX ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++)
+    {
+        init_matrix();
+        gettimeofday(&start, NULL);
+        calculate_AVX();
+        gettimeofday(&end, NULL);
+        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    }
+    cout << "AVX:" << time / LOOP << "ms" << endl;
     // ====================================== pthread_AVX ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -88,7 +99,6 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "pthread_AVX:" << time / LOOP << "ms" << endl;
-    print_matrix();
     system("pause");
 }
 
@@ -289,6 +299,57 @@ void calculate_pthread_SSE()
     // 销毁信号量
     sem_destroy(&sem_Division);
     pthread_barrier_destroy(&barrier);
+}
+
+// AVX 并行算法
+void calculate_AVX()
+{
+    for (int k = 0; k < N; k++)
+	{
+		// float Akk = matrix[k][k];
+		__m256 Akk = _mm256_set1_ps(matrix[k][k]);
+		int j;
+		// 并行处理
+		for (j = k + 1; j + 7 < N; j += 8)
+		{
+			//float Akj = matrix[k][j];
+			__m256 Akj = _mm256_loadu_ps(matrix[k] + j);
+			// Akj = Akj / Akk;
+			Akj = _mm256_div_ps(Akj, Akk);
+			//Akj = matrix[k][j];
+			_mm256_storeu_ps(matrix[k] + j, Akj);
+		}
+        // 串行处理结尾
+		for (; j < N; j++)
+		{
+			matrix[k][j] = matrix[k][j] / matrix[k][k];
+		}
+		matrix[k][k] = 1;
+		for (int i = k + 1; i < N; i++)
+		{
+			// float Aik = matrix[i][k];
+			__m256 Aik = _mm256_set1_ps(matrix[i][k]);
+			for (j = k + 1; j + 7 < N; j += 8)
+			{
+				//float Akj = matrix[k][j];
+				__m256 Akj = _mm256_loadu_ps(matrix[k] + j);
+				//float Aij = matrix[i][j];
+				__m256 Aij = _mm256_loadu_ps(matrix[i] + j);
+				// AikMulAkj = matrix[i][k] * matrix[k][j];
+				__m256 AikMulAkj = _mm256_mul_ps(Aik, Akj);
+				// Aij = Aij - AikMulAkj;
+				Aij = _mm256_sub_ps(Aij, AikMulAkj);
+				//matrix[i][j] = Aij;
+				_mm256_storeu_ps(matrix[i] + j, Aij);
+			}
+            // 串行处理结尾
+			for (; j < N; j++)
+			{
+				matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+			}
+			matrix[i][k] = 0;
+		}
+	}
 }
 
 // pthread_AVX 线程函数
