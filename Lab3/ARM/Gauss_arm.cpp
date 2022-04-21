@@ -12,14 +12,14 @@ typedef struct
 } threadParam_t;
 
 sem_t sem_Division;
-sem_t sem_Elimination;
+pthread_barrier_t barrier;
 
 const int THREAD_NUM = 8;
 
 // ------------------------------------------ 全局计算变量 ------------------------------------------
-const int N = 100;
+const int N = 10;
 const int L = 100;
-const int LOOP = 100;
+const int LOOP = 1;
 float data[N][N];
 float matrix[N][N];
 
@@ -28,6 +28,7 @@ void init_matrix();
 void calculate_serial();
 void calculate_neon();
 void calculate_pthread();
+void print_matrix();
 
 int main()
 {
@@ -57,6 +58,7 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "neon:" << time / LOOP << "ms" << endl;
+    print_matrix();
     // ====================================== pthread ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -68,6 +70,7 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "pthread:" << time / LOOP << "ms" << endl;
+    print_matrix();
 }
 
 // 初始化data，保证每次数据都是一致的
@@ -159,7 +162,15 @@ void *threadFunc(void *param)
         // 如果当前是0号线程，则进行除法操作，其余线程处于等待状态
         if (t_id == 0)
         {
-            for (int j = k + 1; j < N; j++)
+            float32x4_t Akk = vmovq_n_f32(matrix[k][k]);
+            int j;
+            for (j = k + 1; j + 3 < n; j += 4)
+            {
+                float32x4_t Akj = vld1q_f32(matrix[k] + j);
+                Akj = vdivq_f32(Akj, Akk);
+                vst1q_f32(matrix[k] + j, Akj);
+            }
+            for (; j < n; j++)
             {
                 matrix[k][j] = matrix[k][j] / matrix[k][k];
             }
@@ -178,39 +189,31 @@ void *threadFunc(void *param)
                 sem_post(&sem_Division);
             }
         }
-
-        // 循环划分任务
-        for (int i = k + 1 + t_id; i < N; i += THREAD_NUM)
+        else
         {
-            int j = k + 1 + t_id;
-            float32x4_t Aik = vmovq_n_f32(matrix[i][k]);
-            for (j = k + 1; j + 3 < N; j += 4)
+            // 循环划分任务
+            for (int i = k + t_id; i < N; i += (THREAD_NUM - 1))
             {
-                float32x4_t Akj = vld1q_f32(matrix[k] + j);
-                float32x4_t Aij = vld1q_f32(matrix[i] + j);
-                float32x4_t AikMulAkj = vmulq_f32(Aik, Akj);
-                Aij = vsubq_f32(Aij, AikMulAkj);
-                vst1q_f32(matrix[i] + j, Aij);
+                int j = k + 1;
+                float32x4_t Aik = vmovq_n_f32(matrix[i][k]);
+                for (j = k + 1; j + 3 < N; j += 4)
+                {
+                    float32x4_t Akj = vld1q_f32(matrix[k] + j);
+                    float32x4_t Aij = vld1q_f32(matrix[i] + j);
+                    float32x4_t AikMulAkj = vmulq_f32(Aik, Akj);
+                    Aij = vsubq_f32(Aij, AikMulAkj);
+                    vst1q_f32(matrix[i] + j, Aij);
+                }
+                for (; j < N; j++)
+                {
+                    matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+                }
+                matrix[i][k] = 0;
             }
-            for (; j < N; j++)
-            {
-                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
-            }
-            matrix[i][k] = 0;
         }
 
         // 所有线程进入下一轮
-        if (t_id == 0)
-        {
-            for (int i = 1; i < THREAD_NUM; i++)
-            {
-                sem_post(&sem_Elimination);
-            }
-        }
-        else
-        {
-            sem_wait(&sem_Elimination);
-        }
+        pthread_barrier_wait(&barrier);
     }
     pthread_exit(NULL);
     return NULL;
@@ -221,7 +224,7 @@ void calculate_pthread()
 {
     // 信号量初始化
     sem_init(&sem_Division, 0, 0);
-    sem_init(&sem_Elimination, 0, 0);
+    pthread_barrier_init(&barrier,NULL,THREAD_NUM);
 
     // 创建线程
     pthread_t threads[THREAD_NUM];
@@ -240,7 +243,7 @@ void calculate_pthread()
 
     // 销毁信号量
     sem_destroy(&sem_Division);
-    sem_destroy(&sem_Elimination);
+    pthread_barrier_destroy(&barrier);
 }
 
 void print_matrix()
