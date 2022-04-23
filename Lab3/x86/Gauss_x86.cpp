@@ -23,7 +23,7 @@ pthread_barrier_t barrier;
 const int THREAD_NUM = 8;
 
 // ------------------------------------------ 全局计算变量 ------------------------------------------
-const int N = 20;
+const int N = 3000;
 const int L = 100;
 const int LOOP = 1;
 float data[N][N];
