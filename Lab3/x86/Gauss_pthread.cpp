@@ -14,13 +14,15 @@ typedef struct
 
 sem_t sem_Division;
 pthread_barrier_t barrier;
+pthread_mutex_t task;
+int index = 0;
 
 const int THREAD_NUM = 8;
 
 // ------------------------------------------ 全局计算变量 ------------------------------------------
-const int N = 10;
+const int N = 900;
 const int L = 100;
-const int LOOP = 1;
+const int LOOP = 10;
 float data[N][N];
 float matrix[N][N];
 
@@ -30,6 +32,7 @@ void calculate_serial();
 void calculate_SSE();
 void calculate_pthread_discrete();
 void calculate_pthread_continuous();
+void calculate_pthread_dynamic();
 void print_matrix();
 
 int main()
@@ -70,6 +73,7 @@ int main()
         gettimeofday(&end, NULL);
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
+    cout << "pthread_discrete:" << time / LOOP << "ms" << endl;
     // ====================================== pthread_continuous ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -81,6 +85,17 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "pthread_continuous:" << time / LOOP << "ms" << endl;
+    // ====================================== pthread_dynamic ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++)
+    {
+        init_matrix();
+        gettimeofday(&start, NULL);
+        calculate_pthread_dynamic();
+        gettimeofday(&end, NULL);
+        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    }
+    cout << "pthread_dynamic:" << time / LOOP << "ms" << endl;
     system("pause");
 }
 
@@ -359,7 +374,7 @@ void *threadFunc_continuous(void *param)
     return NULL;
 }
 
-// pthread_discrete 并行算法
+// pthread_continuous 并行算法
 void calculate_pthread_continuous()
 {
     // 信号量初始化
@@ -384,6 +399,125 @@ void calculate_pthread_continuous()
     // 销毁信号量
     sem_destroy(&sem_Division);
     pthread_barrier_destroy(&barrier);
+}
+
+// pthread_dynamci 线程函数
+void * threadFunc_dynamic(void *param)
+{
+    threadParam_t *thread_param_t = (threadParam_t *)param;
+    int t_id = thread_param_t->t_id;
+    for (int k = 0; k < N; k++)
+    {
+        // 如果当前是0号线程，则进行除法操作，其余线程处于等待状态
+        if (t_id == 0)
+        {
+            // float Akk = matrix[k][k];
+            __m128 Akk = _mm_set_ps1(matrix[k][k]);
+            int j;
+            //考虑对齐操作
+            for (j = k + 1; j + 3 < N; j += 4)
+            {
+                // float Akj = matrix[k][j];
+                __m128 Akj = _mm_loadu_ps(matrix[k] + j);
+                // Akj = Akj / Akk;
+                Akj = _mm_div_ps(Akj, Akk);
+                // Akj = matrix[k][j];
+                _mm_storeu_ps(matrix[k] + j, Akj);
+            }
+            for (; j < N; j++)
+            {
+                matrix[k][j] = matrix[k][j] / matrix[k][k];
+            }
+            matrix[k][k] = 1.0;
+            index = k + 1;
+        }
+        else
+        {
+            sem_wait(&sem_Division);
+        }
+
+        // 除法操作完成后，如果是0号线程，则需要唤醒其他线程
+        if (t_id == 0)
+        {
+            for (int i = 1; i < THREAD_NUM; i++)
+            {
+                sem_post(&sem_Division);
+            }
+        }
+        else
+        {
+            while(index < N)
+            {
+                pthread_mutex_lock(&task);
+                int i = index;
+                if( i < N )
+                {
+                    index++;
+                    pthread_mutex_unlock(&task);
+                }
+                else
+                {
+                    pthread_mutex_unlock(&task);
+                    break;
+                }
+                // float Aik = matrix[i][k];
+                __m128 Aik = _mm_set_ps1(matrix[i][k]);
+                int j = k + 1;
+                for (; j + 3 < N; j += 4)
+                {
+                    // float Akj = matrix[k][j];
+                    __m128 Akj = _mm_loadu_ps(matrix[k] + j);
+                    // float Aij = matrix[i][j];
+                    __m128 Aij = _mm_loadu_ps(matrix[i] + j);
+                    // AikMulAkj = matrix[i][k] * matrix[k][j];
+                    __m128 AikMulAkj = _mm_mul_ps(Aik, Akj);
+                    // Aij = Aij - AikMulAkj;
+                    Aij = _mm_sub_ps(Aij, AikMulAkj);
+                    // matrix[i][j] = Aij;
+                    _mm_storeu_ps(matrix[i] + j, Aij);
+                }
+                for (; j < N; j++)
+                {
+                    matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+                }
+                matrix[i][k] = 0;
+            }
+        }
+
+        // 所有线程准备进入下一轮
+        pthread_barrier_wait(&barrier);
+    }
+    pthread_exit(NULL);
+    return NULL;
+}
+
+// pthread_dynamic 并行算法
+void calculate_pthread_dynamic()
+{
+    // 信号量初始化
+    sem_init(&sem_Division, 0, 0);
+    pthread_barrier_init(&barrier, NULL, THREAD_NUM);
+    task=PTHREAD_MUTEX_INITIALIZER;
+
+    // 创建线程
+    pthread_t threads[THREAD_NUM];
+    threadParam_t thread_param_t[THREAD_NUM];
+    for (int i = 0; i < THREAD_NUM; i++)
+    {
+        thread_param_t[i].t_id = i;
+        pthread_create(&threads[i], NULL, threadFunc_dynamic, (void *)(&thread_param_t[i]));
+    }
+
+    // 加入执行线程
+    for (int i = 0; i < THREAD_NUM; i++)
+    {
+        pthread_join(threads[i], NULL);
+    }
+
+    // 销毁信号量
+    sem_destroy(&sem_Division);
+    pthread_barrier_destroy(&barrier);
+    pthread_mutex_destroy(&task);
 }
 
 // 打印矩阵
