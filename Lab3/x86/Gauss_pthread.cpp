@@ -20,9 +20,9 @@ int index = 0;
 const int THREAD_NUM = 8;
 
 // ------------------------------------------ 全局计算变量 ------------------------------------------
-const int N = 900;
+const int N = 3000;
 const int L = 100;
-const int LOOP = 10;
+const int LOOP = 1;
 float data[N][N];
 float matrix[N][N];
 
@@ -42,27 +42,27 @@ int main()
     float time = 0;
     init_data();
     // ====================================== serial ======================================
-    time = 0;
-    for (int i = 0; i < LOOP; i++)
-    {
-        init_matrix();
-        gettimeofday(&start, NULL);
-        calculate_serial();
-        gettimeofday(&end, NULL);
-        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
-    }
-    cout << "serial:" << time / LOOP << "ms" << endl;
+    // time = 0;
+    // for (int i = 0; i < LOOP; i++)
+    // {
+    //     init_matrix();
+    //     gettimeofday(&start, NULL);
+    //     calculate_serial();
+    //     gettimeofday(&end, NULL);
+    //     time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    // }
+    // cout << "serial:" << time / LOOP << "ms" << endl;
     // ====================================== SSE ======================================
-    time = 0;
-    for (int i = 0; i < LOOP; i++)
-    {
-        init_matrix();
-        gettimeofday(&start, NULL);
-        calculate_SSE();
-        gettimeofday(&end, NULL);
-        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
-    }
-    cout << "SSE:" << time / LOOP << "ms" << endl;
+    // time = 0;
+    // for (int i = 0; i < LOOP; i++)
+    // {
+    //     init_matrix();
+    //     gettimeofday(&start, NULL);
+    //     calculate_SSE();
+    //     gettimeofday(&end, NULL);
+    //     time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    // }
+    // cout << "SSE:" << time / LOOP << "ms" << endl;
     // ====================================== pthread_discrete ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
