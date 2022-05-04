@@ -1,7 +1,10 @@
+#include <iostream>
 #include "KMeans.h"
+using namespace std;
 
 int main() {
-    KMeans<int> kmeans = KMeans<int>(5);
-    kmeans.print();
+    KMeans kmeans = KMeans(5);
+    kmeans.fit();
+    kmeans.printResult();
     return 0;
 }

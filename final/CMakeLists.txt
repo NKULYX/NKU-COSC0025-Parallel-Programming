@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(final)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 
-add_executable(final main.cpp KMeans.h)
+add_executable(final main.cpp KMeans.cpp)
