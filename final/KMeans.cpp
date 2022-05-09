@@ -8,12 +8,7 @@
 #include <cstring>
 #include <random>
 
-
-KMeans::KMeans(int K) {
-    KMeans(K, "normal");
-}
-
-KMeans::KMeans(int K, string method) {
+KMeans::KMeans(int K, int L, string method) {
     this->K = K;
 
     if(method == "normal")
@@ -104,7 +99,11 @@ void KMeans::printResult() {
 }
 
 void KMeans::fitNormal() {
-
+    initCentroidsRandom();
+    for(int i=0; i<this->L;i++){
+        calculateSerial();
+        updateCentroids();
+    }
 }
 
 void KMeans::fitKMeansPlusPlus() {
@@ -121,4 +120,83 @@ void KMeans::fitPthread() {
 
 void KMeans::fitOMP() {
 
+}
+
+/*
+ * calculate serially
+ */
+void KMeans::calculateSerial() {
+    for(int i=0;i<this->N;i++){
+        float min = 1e9;
+        int minIndex = 0;
+        for(int k=0;k<this->K;k++) {
+            float dis = calculateDistance(this->data[i], this->centroids[k]);
+            if(dis < min) {
+                min = dis;
+                minIndex = k;
+            }
+        }
+        this->clusterLabels[i] = minIndex;
+    }
+}
+
+/*
+ * update the centroids serially
+ */
+void KMeans::updateCentroids() {
+    // initialize the number of each cluster as 0
+    memset(this->clusterCount, 0, sizeof(int) * K);
+    // accumulate the data of each dimension in the cluster
+    for(int i=0;i<this->N;i++){
+        int cluster = this->clusterLabels[i];
+        for(int j=0;j<this->D;j++){
+            this->centroids[cluster][j] += this->data[i][j];
+        }
+        this->clusterCount[cluster]++;
+    }
+    // calculate the mean of the cluster
+    for(int i=0;i<this->K;i++){
+        for(int j=0;j<this->D;j++){
+            this->centroids[i][j] /= this->clusterCount[i];
+        }
+    }
+}
+
+/*
+ * calculate the distance between a data and a centroid
+ * @param data: the data
+ * @param centroid: the centroid
+ * @return: the distance
+ */
+float KMeans::calculateDistance(float *data, float *centroid) {
+    float dis = 0;
+    for(int i = 0; i < this->D; i++)
+        dis += (data[i] - centroid[i]) * (data[i] - centroid[i]);
+    return dis;
+}
+
+/*
+ * get the test data
+ * @param n: the number of data
+ * @param d: the dimension of data
+ * @return: the test data
+ */
+float **KMeans::getTestData(int n, int d) {
+    auto** tmpData = new float*[n];
+    for(int i = 0; i < n; i++)
+        tmpData[i] = new float[d];
+    default_random_engine e;
+    uniform_real_distribution<float> u1(0, 1000);
+    uniform_real_distribution<float> u2(-50, 50);
+    int step = n / this->K + 1;
+    for(int i=0;i<this->K;i++){
+        auto* tmpCenter = new float[d];
+        for(int j=0;j<d;j++)
+            tmpCenter[j] = u1(e);
+        for(int j = i * step; j < (i + 1) * step && j < n; j++){
+            for(int m=0; m < d; m++)
+                tmpData[j][m] = tmpCenter[m] + u2(e);
+        }
+    }
+    return tmpData;
 }

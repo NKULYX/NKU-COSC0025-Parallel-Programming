@@ -16,6 +16,9 @@ class KMeans {
     int method;    // 优化方法
     void initCentroidsRandom();
     void initCentroidsOptimize();
+    void calculateSerial();
+    void updateCentroids();
+    float calculateDistance(float*, float*);
     void fitNormal();
     void fitKMeansPlusPlus();
     void fitSIMD();
@@ -23,10 +26,10 @@ class KMeans {
     void fitOMP();
 
 public:
-    explicit KMeans(int K);
-    KMeans(int K, string method);
+    KMeans(int K, int L, string method = "normal");
     ~KMeans();
     void initData(float**,int,int);
+    float** getTestData(int,int);
     void fit();
     void printResult();
 
