@@ -8,7 +8,7 @@
 using namespace std;
 
 int NUM_THREADS = 8;
-// ============================================== pthread 线程控制 ==============================================
+// ============================================== pthread 线程控制变量 ==============================================
 typedef struct
 {
     int t_id;
@@ -16,8 +16,8 @@ typedef struct
 
 sem_t sem_Division;
 pthread_barrier_t barrier;
-// ============================================== 
-const int N = 2000;
+// ============================================== 运算变量 ==============================================
+const int N = 10;
 const int L = 100;
 const int LOOP = 1;
 float data[N][N];
@@ -26,16 +26,18 @@ float matrix[N][N];
 void init_data();
 void init_matrix();
 void calculate_serial();
-void calculate_SSE();
-void calculate_openmp_single_simd();
+void calculate_SIMD();
+void calculate_openmp_single_SIMD();
 void calculate_pthread();
 void calculate_openmp_schedule_static();
 void calculate_openmp_schedule_dynamic();
 void calculate_openmp_schedule_guided();
 void calculate_openmp_schedule_guided_nowait();
-void calculate_openmp_schedule_guided_SSE();
+void calculate_openmp_schedule_guided_SIMD();
 void calculate_openmp_static_thread();
 void calculate_openmp_dynamic_thread();
+void calculate_openmp_row();
+void calculate_openmp_column();
 void print_matrix();
 
 int main()
@@ -55,28 +57,28 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "serial:" << time / LOOP << "ms" << endl;
-    // ====================================== SSE ======================================
+    // ====================================== SIMD ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
     {
         init_matrix();
         gettimeofday(&start, NULL);
-        calculate_SSE();
+        calculate_SIMD();
         gettimeofday(&end, NULL);
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
-    cout << "SSE:" << time / LOOP << "ms" << endl;
-    // ====================================== openmp_single_simd ======================================
+    cout << "SIMD:" << time / LOOP << "ms" << endl;
+    // ====================================== openmp_single_SIMD ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
     {
         init_matrix();
         gettimeofday(&start, NULL);
-        calculate_openmp_single_simd();
+        calculate_openmp_single_SIMD();
         gettimeofday(&end, NULL);
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
-    cout << "openmp_single_simd:" << time / LOOP << "ms" << endl;
+    cout << "openmp_single_SIMD:" << time / LOOP << "ms" << endl;
     // ====================================== pthread ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -132,17 +134,17 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "openmp_schedule_guided_nowait:" << time / LOOP << "ms" << endl;
-    // ====================================== openmp_schedule_guided_SSE ======================================
+    // ====================================== openmp_schedule_guided_SIMD ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
     {
         init_matrix();
         gettimeofday(&start, NULL);
-        calculate_openmp_schedule_guided_SSE();
+        calculate_openmp_schedule_guided_SIMD();
         gettimeofday(&end, NULL);
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
-    cout << "openmp_schedule_guided_SSE:" << time / LOOP << "ms" << endl;
+    cout << "openmp_schedule_guided_SIMD:" << time / LOOP << "ms" << endl;
     // ====================================== openmp_static_thread ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -165,6 +167,28 @@ int main()
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     cout << "openmp_dynamic_thread:" << time / LOOP << "ms" << endl;
+    // ====================================== openmp_row ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++)
+    {
+        init_matrix();
+        gettimeofday(&start, NULL);
+        calculate_openmp_row();
+        gettimeofday(&end, NULL);
+        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    }
+    cout << "openmp_row:" << time / LOOP << "ms" << endl;
+    // ====================================== openmp_column ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++)
+    {
+        init_matrix();
+        gettimeofday(&start, NULL);
+        calculate_openmp_column();
+        gettimeofday(&end, NULL);
+        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    }
+    cout << "openmp_column:" << time / LOOP << "ms" << endl;
     system("pause");
     return 0;
 }
@@ -210,7 +234,7 @@ void calculate_serial()
 }
 
 // SSE并行算法
-void calculate_SSE()
+void calculate_SIMD()
 {
     for (int k = 0; k < N; k++)
     {
@@ -260,7 +284,8 @@ void calculate_SSE()
     }
 }
 
-void calculate_openmp_single_simd()
+// 单独使用openmp进行simd优化
+void calculate_openmp_single_SIMD()
 {
     int i, j, k;
     float tmp;
@@ -525,7 +550,7 @@ void calculate_openmp_schedule_guided_nowait()
 }
 
 // openmp + simd
-void calculate_openmp_schedule_guided_SSE()
+void calculate_openmp_schedule_guided_SIMD()
 {
     int i, j, k;
     float tmp;
@@ -552,7 +577,7 @@ void calculate_openmp_schedule_guided_SSE()
             // 串行处理结尾
             for (; j < N; j++)
             {
-                matrix[k][j] = matrix[k][j] / matrix[k][k];
+                matrix[k][j] = matrix[k][j] / tmp;
             }
             matrix[k][k] = 1;
         }
@@ -585,7 +610,7 @@ void calculate_openmp_schedule_guided_SSE()
     }
 }
 
-// 静态线程版本呢
+// 静态线程版本
 void calculate_openmp_static_thread()
 {
     int i, j, k;
@@ -651,6 +676,60 @@ void calculate_openmp_dynamic_thread()
     }
 }
 
+// 按行划分
+void calculate_openmp_row()
+{
+    int i, j, k;
+    float tmp;
+    #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix)
+    for (k = 0; k < N; k++)
+    {
+        #pragma omp single
+        {
+            tmp = matrix[k][k];
+            #pragma omp simd
+            for (j = k + 1; j < N; j++)
+            {
+                matrix[k][j] = matrix[k][j] / tmp;
+            }
+            matrix[k][k] = 1.0;
+        }
+        #pragma omp for schedule(simd:guided)
+        for (i = k + 1; i < N; i++)
+        {
+            tmp = matrix[i][k];
+            #pragma omp simd
+            for (j = k + 1; j < N; j++)
+            {
+                matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
+            }
+            matrix[i][k] = 0;
+        }
+    }
+}
+
+// 按列划分
+void calculate_openmp_column()
+{
+    int i, j, k;
+    #pragma omp parallel num_threads(NUM_THREADS), default(none), private(i, j, k), shared(matrix,N)
+    for (k = 0; k < N; k++) {
+        #pragma omp for schedule(simd:guided)
+        for (j = k + 1; j < N; j++) {
+            matrix[k][j] = matrix[k][j] / matrix[k][k];
+            for (i = k + 1; i < N; i++) {
+                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+            }
+        }
+        #pragma omp single
+        {
+            matrix[k][k] = 1;
+            for (i = k + 1; i < N; i++) {
+                matrix[i][k] = 0;
+            }
+        }
+    }
+}
 
 
 // 打印矩阵
