@@ -1,6 +1,9 @@
 #include <iostream>
 #include <windows.h>
 #include <sys/time.h>
+
+//#define debug
+
 using namespace std;
 
 const int N = 500;
@@ -29,7 +32,9 @@ int main()
         gettimeofday(&end, NULL);
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
+    #ifdef debug
     cout << "serial:" << time / LOOP << "ms" << endl;
+    #endif
 	system("pause");
 }
 

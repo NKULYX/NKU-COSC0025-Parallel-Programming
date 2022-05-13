@@ -141,24 +141,25 @@ void calculate_openmp_single_simd()
 {
     int i, j, k;
     float tmp;
-    #pragma omp parallel num_threads(1) private(i, j, k, tmp) shared(matrix,N)
+#pragma omp parallel num_threads(1) private(i, j, k, tmp) shared(matrix, N)
     for (k = 0; k < N; k++)
     {
-        #pragma omp single
+#pragma omp single
         {
             tmp = matrix[k][k];
-            #pragma omp simd aligned(matrix:16) simdlen(4)
+#pragma omp simd aligned(matrix : 16) simdlen(4)
             for (j = k + 1; j < N; j++)
             {
                 matrix[k][j] = matrix[k][j] / tmp;
             }
             matrix[k][k] = 1.0;
         }
-        #pragma omp for schedule(simd:guided)
+#pragma omp for schedule(simd \
+                         : guided)
         for (i = k + 1; i < N; i++)
         {
             tmp = matrix[i][k];
-            #pragma omp simd aligned(matrix:16) simdlen(4)
+#pragma omp simd aligned(matrix : 16) simdlen(4)
             for (j = k + 1; j < N; j++)
             {
                 matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
@@ -240,7 +241,7 @@ void calculate_pthread()
 {
     // 信号量初始化
     sem_init(&sem_Division, 0, 0);
-    pthread_barrier_init(&barrier,NULL,NUM_THREADS);
+    pthread_barrier_init(&barrier, NULL, NUM_THREADS);
 
     // 创建线程
     pthread_t threads[NUM_THREADS];
@@ -267,24 +268,25 @@ void calculate_openmp_schedule_static()
 {
     int i, j, k;
     float tmp;
-    #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix,N)
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix, N)
     for (k = 0; k < N; k++)
     {
-        #pragma omp single
+#pragma omp single
         {
             tmp = matrix[k][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[k][j] = matrix[k][j] / tmp;
             }
             matrix[k][k] = 1.0;
         }
-        #pragma omp for schedule(simd:static)
+#pragma omp for schedule(simd \
+                         : static)
         for (i = k + 1; i < N; i++)
         {
             tmp = matrix[i][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
@@ -299,24 +301,25 @@ void calculate_openmp_schedule_dynamic()
 {
     int i, j, k;
     float tmp;
-    #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix,N)
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix, N)
     for (k = 0; k < N; k++)
     {
-        #pragma omp single 
+#pragma omp single
         {
             tmp = matrix[k][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[k][j] = matrix[k][j] / tmp;
             }
             matrix[k][k] = 1.0;
         }
-        #pragma omp for schedule(simd:dynamic)
+#pragma omp for schedule(simd \
+                         : dynamic)
         for (i = k + 1; i < N; i++)
         {
             tmp = matrix[i][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
@@ -331,24 +334,25 @@ void calculate_openmp_schedule_guided()
 {
     int i, j, k;
     float tmp;
-    #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix,N)
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix, N)
     for (k = 0; k < N; k++)
     {
-        #pragma omp single
+#pragma omp single
         {
             tmp = matrix[k][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[k][j] = matrix[k][j] / tmp;
             }
             matrix[k][k] = 1.0;
         }
-        #pragma omp for schedule(simd:guided)
+#pragma omp for schedule(simd \
+                         : guided)
         for (i = k + 1; i < N; i++)
         {
             tmp = matrix[i][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
@@ -363,24 +367,25 @@ void calculate_openmp_schedule_guided_nowait()
 {
     int i, j, k;
     float tmp;
-    #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix,N)
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix, N)
     for (k = 0; k < N; k++)
     {
-        #pragma omp single
+#pragma omp single
         {
             tmp = matrix[k][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[k][j] = matrix[k][j] / tmp;
             }
             matrix[k][k] = 1.0;
         }
-        #pragma omp for schedule(simd:guided) nowait
+#pragma omp for schedule(simd \
+                         : guided) nowait
         for (i = k + 1; i < N; i++)
         {
             tmp = matrix[i][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
@@ -396,7 +401,7 @@ void calculate_openmp_schedule_guided_SIMD()
     int i, j, k;
     float tmp;
     float32x4_t Akk, Akj, Aik, Aij, AikMulAkj;
-    #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp, Akk, Akj, Aik, Aij, AikMulAkj) shared(matrix,N)
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp, Akk, Akj, Aik, Aij, AikMulAkj) shared(matrix, N)
     for (k = 0; k < N; k++)
     {
         // float Akk = matrix[k][k];
@@ -404,7 +409,7 @@ void calculate_openmp_schedule_guided_SIMD()
         int j;
         // 并行处理
         tmp = matrix[k][k];
-        #pragma omp single
+#pragma omp single
         {
             for (j = k + 1; j + 3 < N; j += 4)
             {
@@ -422,7 +427,8 @@ void calculate_openmp_schedule_guided_SIMD()
             }
             matrix[k][k] = 1;
         }
-        #pragma omp for schedule(simd:guided)
+#pragma omp for schedule(simd \
+                         : guided)
         for (int i = k + 1; i < N; i++)
         {
             tmp = matrix[i][k];
@@ -456,24 +462,25 @@ void calculate_openmp_static_thread()
 {
     int i, j, k;
     float tmp;
-    #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix,N)
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix, N)
     for (k = 0; k < N; k++)
     {
-        #pragma omp single
+#pragma omp single
         {
             tmp = matrix[k][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[k][j] = matrix[k][j] / tmp;
             }
             matrix[k][k] = 1.0;
         }
-        #pragma omp for schedule(simd:guided)
+#pragma omp for schedule(simd \
+                         : guided)
         for (i = k + 1; i < N; i++)
         {
             tmp = matrix[i][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
@@ -490,23 +497,24 @@ void calculate_openmp_dynamic_thread()
     float tmp;
     for (k = 0; k < N; k++)
     {
-        #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, tmp) shared(k, matrix,N)
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, tmp) shared(k, matrix, N)
         {
-            #pragma omp single
+#pragma omp single
             {
                 tmp = matrix[k][k];
-                #pragma omp simd
+#pragma omp simd
                 for (j = k + 1; j < N; j++)
                 {
                     matrix[k][j] = matrix[k][j] / tmp;
                 }
                 matrix[k][k] = 1.0;
             }
-            #pragma omp for schedule(simd:guided)
+#pragma omp for schedule(simd \
+                         : guided)
             for (i = k + 1; i < N; i++)
             {
                 tmp = matrix[i][k];
-                #pragma omp simd
+#pragma omp simd
                 for (j = k + 1; j < N; j++)
                 {
                     matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
@@ -522,24 +530,25 @@ void calculate_openmp_row()
 {
     int i, j, k;
     float tmp;
-    #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix,N)
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k, tmp) shared(matrix, N)
     for (k = 0; k < N; k++)
     {
-        #pragma omp single
+#pragma omp single
         {
             tmp = matrix[k][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[k][j] = matrix[k][j] / tmp;
             }
             matrix[k][k] = 1.0;
         }
-        #pragma omp for schedule(simd:guided)
+#pragma omp for schedule(simd \
+                         : guided)
         for (i = k + 1; i < N; i++)
         {
             tmp = matrix[i][k];
-            #pragma omp simd
+#pragma omp simd
             for (j = k + 1; j < N; j++)
             {
                 matrix[i][j] = matrix[i][j] - tmp * matrix[k][j];
@@ -553,25 +562,29 @@ void calculate_openmp_row()
 void calculate_openmp_column()
 {
     int i, j, k;
-    #pragma omp parallel num_threads(NUM_THREADS), default(none), private(i, j, k), shared(matrix,N)
-    for (k = 0; k < N; k++) {
-        #pragma omp for schedule(simd:guided)
-        for (j = k + 1; j < N; j++) {
+#pragma omp parallel num_threads(NUM_THREADS), default(none), private(i, j, k), shared(matrix, N)
+    for (k = 0; k < N; k++)
+    {
+#pragma omp for schedule(simd \
+                         : guided)
+        for (j = k + 1; j < N; j++)
+        {
             matrix[k][j] = matrix[k][j] / matrix[k][k];
-            for (i = k + 1; i < N; i++) {
+            for (i = k + 1; i < N; i++)
+            {
                 matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
             }
         }
-        #pragma omp single
+#pragma omp single
         {
             matrix[k][k] = 1;
-            for (i = k + 1; i < N; i++) {
+            for (i = k + 1; i < N; i++)
+            {
                 matrix[i][k] = 0;
             }
         }
     }
 }
-
 
 // 打印矩阵
 void print_matrix()
@@ -607,7 +620,7 @@ void test(int n)
     }
     cout << "serial:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== SIMD ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -620,7 +633,7 @@ void test(int n)
     }
     cout << "SIMD:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_single_SIMD ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -633,7 +646,7 @@ void test(int n)
     }
     cout << "openmp_single_SIMD:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== pthread ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -646,7 +659,7 @@ void test(int n)
     }
     cout << "pthread:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_schedule_static ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -659,7 +672,7 @@ void test(int n)
     }
     cout << "openmp_schedule_static:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_schedule_dynamic ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -672,7 +685,7 @@ void test(int n)
     }
     cout << "openmp_schedule_dynamic:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_schedule_guided ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -685,7 +698,7 @@ void test(int n)
     }
     cout << "openmp_schedule_guided:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_schedule_guided_nowait ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -698,7 +711,7 @@ void test(int n)
     }
     cout << "openmp_schedule_guided_nowait:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_schedule_guided_SIMD ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -711,7 +724,7 @@ void test(int n)
     }
     cout << "openmp_schedule_guided_SIMD:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_static_thread ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -724,7 +737,7 @@ void test(int n)
     }
     cout << "openmp_static_thread:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_dynamic_thread ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -737,7 +750,7 @@ void test(int n)
     }
     cout << "openmp_dynamic_thread:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_row ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -750,7 +763,7 @@ void test(int n)
     }
     cout << "openmp_row:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
-//    print_matrix();
+    //    print_matrix();
     // ====================================== openmp_column ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++)
@@ -764,5 +777,5 @@ void test(int n)
     cout << "openmp_column:" << time / LOOP << "ms" << endl;
     res_stream << "," << time / LOOP;
     res_stream << endl;
-//    print_matrix();
+    //    print_matrix();
 }
