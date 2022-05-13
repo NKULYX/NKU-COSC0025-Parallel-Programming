@@ -27,6 +27,9 @@ void init_data();
 void init_matrix();
 void calculate_serial();
 void calculate_openmp();
+void calculate_offload();
+
+
 void print_matrix();
 
 
@@ -104,6 +107,31 @@ void calculate_serial()
     }
 }
 
+// openmp 并行算法
+void calculate_openmp()
+{
+    #pragma omp parallel num_threads(NUM_THREADS)
+    for (int k = 0; k < N; k++)
+    {
+        #pragma omp master
+        for (int j = k + 1; j < N; j++)
+        {
+            matrix[k][j] = matrix[k][j] / matrix[k][k];
+        }
+        matrix[k][k] = 1;
+        #pragma omp for schedule(simd:dynamic)
+        for (int i = k + 1; i < N; i++)
+        {
+            for (int j = k + 1; j < N; j++)
+            {
+                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+            }
+            matrix[i][k] = 0;
+        }
+    }
+}
+
+// openmp offload
 void calculate_openmp()
 {
     #pragma omp parallel num_threads(NUM_THREADS)
