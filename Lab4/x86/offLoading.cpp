@@ -1,14 +1,19 @@
 #include <iostream>
+#include <fstream>
 #include <math.h>
 #include <sys/time.h>
 #include <xmmintrin.h> // SSE
-#include <pthread.h> // pthread
+#include <pthread.h>   // pthread
 #include <semaphore.h>
 #include <omp.h>
+
+#define _PRINT
+// #define _TEST
+
 using namespace std;
 
 int NUM_THREADS = 8;
-// ============================================== pthread 线程控制 ==============================================
+// ============================================== pthread 线程控制变量 ==============================================
 typedef struct
 {
     int t_id;
@@ -16,59 +21,46 @@ typedef struct
 
 sem_t sem_Division;
 pthread_barrier_t barrier;
-// ============================================== 
-const int N = 1000;
+// ============================================== 运算变量 ==============================================
+int N;
 const int L = 100;
 const int LOOP = 1;
-float data[N][N];
-float matrix[N][N];
+float **data;
+float **matrix;
+
+ofstream res_stream;
 
 void init_data();
 void init_matrix();
 void calculate_serial();
-void calculate_openmp();
-void calculate_offload();
-
-
+void calculate_SIMD();
+void calculate_openmp_offloading(float*);
 void print_matrix();
-
+void test(int);
+void print_result(int);
 
 int main()
 {
-    struct timeval start;
-    struct timeval end;
-    float time = 0;
-    init_data();
-    // ====================================== serial ======================================
-    time = 0;
-    for (int i = 0; i < LOOP; i++)
-    {
-        init_matrix();
-        gettimeofday(&start, NULL);
-        calculate_serial();
-        gettimeofday(&end, NULL);
-        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
-    }
-    cout << "serial:" << time / LOOP << "ms" << endl;
-
-    // ====================================== openmp ======================================
-    time = 0;
-    for (int i = 0; i < LOOP; i++)
-    {
-        init_matrix();
-        gettimeofday(&start, NULL);
-        calculate_openmp();
-        gettimeofday(&end, NULL);
-        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
-    }
-    cout << "openmp:" << time / LOOP << "ms" << endl;
+    #ifdef _TEST
+    res_stream.open("result.csv", ios::out);
+    for (int i = 100; i <= 1000; i += 100)
+        test(i);
+    for (int i = 1000; i <= 3000; i += 500)
+        test(i);
+    res_stream.close();
+    #endif
+    #ifdef _PRINT
+        test(10);
+    #endif
     system("pause");
     return 0;
 }
 
-
 void init_data()
 {
+    data = new float *[N], matrix = new float *[N];
+    for (int i = 0; i < N; i++)
+        data[i] = new float[N], matrix[i] = new float[N];
     for (int i = 0; i < N; i++)
         for (int j = i; j < N; j++)
             data[i][j] = rand() * 1.0 / RAND_MAX * L;
@@ -107,52 +99,37 @@ void calculate_serial()
     }
 }
 
-// openmp 并行算法
-void calculate_openmp()
+// openmp offloading
+void calculate_openmp_offloading(float * buffer)
 {
-    #pragma omp parallel num_threads(NUM_THREADS)
-    for (int k = 0; k < N; k++)
+    int is_cpu = true;
+    float * buf = buffer;
+#pragma omp target map(tofrom: buf[0:N*N]) map(from: is_cpu) map(to: N)
     {
-        #pragma omp master
-        for (int j = k + 1; j < N; j++)
-        {
-            matrix[k][j] = matrix[k][j] / matrix[k][k];
-        }
-        matrix[k][k] = 1;
-        #pragma omp for schedule(simd:dynamic)
-        for (int i = k + 1; i < N; i++)
-        {
-            for (int j = k + 1; j < N; j++)
-            {
-                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
-            }
-            matrix[i][k] = 0;
-        }
-    }
-}
+        int i, j, k;
+        is_cpu = omp_is_initial_device();
 
-// openmp offload
-void calculate_openmp()
-{
-    #pragma omp parallel num_threads(NUM_THREADS)
-    for (int k = 0; k < N; k++)
-    {
-        #pragma omp master
-        for (int j = k + 1; j < N; j++)
-        {
-            matrix[k][j] = matrix[k][j] / matrix[k][k];
-        }
-        matrix[k][k] = 1;
-        #pragma omp for schedule(simd:dynamic)
-        for (int i = k + 1; i < N; i++)
-        {
-            for (int j = k + 1; j < N; j++)
+        for (k = 0; k < N; k++) {
+#pragma omp parallel default(none), private(i, j), shared(buf, N, k)
             {
-                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+#pragma omp single
+                {
+                    for (j = k + 1; j < N; j++) {
+                        buf[k*N+j] = buf[k*N+j] / buf[k*N+k];
+                    }
+                    buf[k*N+k] = 1;
+                }
+#pragma omp for simd
+                for (i = k + 1; i < N; i++) {
+                    for (j = k + 1; j < N; j++) {
+                        buf[i*N+j] = buf[i*N+j] - buf[i*N+k] * buf[k*N+j];
+                    }
+                    buf[i*N+k] = 0;
+                }
             }
-            matrix[i][k] = 0;
         }
     }
+    cout<<(is_cpu? "CPU":"GPU")<<endl;
 }
 
 // 打印矩阵
@@ -166,4 +143,60 @@ void print_matrix()
         }
         printf("\n");
     }
+}
+
+void test(int n)
+{
+    N = n;
+    cout << "=================================== " << N << " ===================================" << endl;
+    #ifdef _TEST
+    res_stream << N;
+    #endif
+    struct timeval start;
+    struct timeval end;
+    float time = 0;
+    init_data();
+    // ====================================== serial ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++)
+    {
+        init_matrix();
+        gettimeofday(&start, NULL);
+        calculate_serial();
+        gettimeofday(&end, NULL);
+        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    }
+    cout << "serial:" << time / LOOP << "ms" << endl;
+    print_result(time);
+    // ====================================== openmp offloading ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++)
+    {
+        init_matrix();
+        float * buffer = new float[N*N];
+        for(int i = 0; i < N*N; i++)
+            buffer[i] = matrix[i/N][i%N];
+        gettimeofday(&start, NULL);
+        calculate_openmp_offloading(buffer);
+        gettimeofday(&end, NULL);
+        // 将buffer复制回matrix
+        for(int i = 0; i < N*N; i++)
+            matrix[i/N][i%N] = buffer[i];
+        time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
+    }
+    cout << "openmp_offloading:" << time / LOOP << "ms" << endl;
+    print_result(time);
+    #ifdef _TEST
+    res_stream << endl;
+    #endif
+}
+
+void print_result(int time)
+{
+    #ifdef _TEST
+    res_stream << "," << time / LOOP;
+    #endif
+    #ifdef _PRINT
+    print_matrix();
+    #endif
 }

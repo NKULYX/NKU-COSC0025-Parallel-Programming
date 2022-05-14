@@ -26,7 +26,7 @@ int N;
 const int L = 100;
 const int LOOP = 50;
 float **data;
-float **matrix;
+float **matrix = NULL;
 
 ofstream res_stream;
 
@@ -66,6 +66,7 @@ int main()
     return 0;
 }
 
+// 初始化数据
 void init_data()
 {
     data = new float *[N], matrix = new float *[N];
@@ -83,6 +84,13 @@ void init_data()
 // 用data初始化matrix，保证每次进行计算的数据是一致的
 void init_matrix()
 {
+    if(matrix!=NULL)
+        for (int i = 0; i < N; i++)
+            delete[] matrix[i];
+    delete[] matrix;
+    matrix = new float *[N];
+    for (int i = 0; i < N; i++)
+        matrix[i] = new float[N];
     for (int i = 0; i < N; i++)
         for (int j = 0; j < N; j++)
             matrix[i][j] = data[i][j];
@@ -634,6 +642,7 @@ void print_matrix()
     }
 }
 
+// 测试函数
 void test(int n)
 {
     N = n;
@@ -806,6 +815,7 @@ void test(int n)
     #endif
 }
 
+// 结果打印
 void print_result(int time)
 {
     #ifdef _TEST
