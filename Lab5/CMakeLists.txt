@@ -7,6 +7,8 @@ find_package(MPI REQUIRED)
 
 include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
-add_executable(Lab5 main.cpp)
+add_executable(x86 x86/Gauss.cpp)
+add_executable(arm arm/Gauss.cpp)
 
-target_link_libraries(${PROJECT_NAME} ${MPI_LIBRARIES})
+target_link_libraries(x86 ${MPI_LIBRARIES})
+target_link_libraries(arm ${MPI_LIBRARIES})
