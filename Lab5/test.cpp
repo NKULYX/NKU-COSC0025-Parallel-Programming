@@ -28,8 +28,15 @@ void init_data()
 
 int main()
 {
-    init_data();
-    for(int i = 0; i < N; i++,cout<<endl)
-        for(int j = 0; j < N; j++)
-            cout<<&matrix[i][j] << " ";
+    int **a, **b;
+    a = new int *[2];
+    b = new int *[2];
+    a[0] = new int[2];
+    a[1] = new int[2];
+    b[0] = new int[2];
+    b[1] = new int[2];
+    a[0][0] = 1;
+    b[0][0] = a[0][0];
+    a[0][0] = 2;
+    cout<<b[0][0]<<endl;
 }

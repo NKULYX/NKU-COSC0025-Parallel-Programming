@@ -5,8 +5,8 @@
 #include <sys/time.h>
 
 
-#define _PRINT
-//#define _TEST
+//#define _PRINT
+#define _TEST
 
 using namespace std;
 
@@ -28,6 +28,8 @@ void calculate_serial();
 double calculate_MPI_block();
 
 double calculate_MPI_cycle();
+
+double calculate_MPI_pipeline();
 
 void print_matrix();
 
@@ -201,7 +203,9 @@ double calculate_MPI_cycle() {
     else {
         MPI_Recv(&matrix[rank][0], task_num * N, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         for (int i = 0; i < task_num; i++) {
-            matrix[rank + i * size] = matrix[rank + i];
+            for(int j = 0; j < N; j++){
+                matrix[rank + i * size][j] = matrix[rank + i][j];
+            }
         }
     }
     // 做消元运算
@@ -214,13 +218,13 @@ double calculate_MPI_cycle() {
             matrix[k][k] = 1;
             for (int p = 0; p < size; p++) {
                 if (p != rank) {
-                    MPI_Send(&matrix[k][0], N, MPI_FLOAT, p, 0, MPI_COMM_WORLD);
+                    MPI_Send(&matrix[k][0], N, MPI_FLOAT, p, 1, MPI_COMM_WORLD);
                 }
             }
         }
             // 其余进程接收除法行的结果
         else {
-            MPI_Recv(&matrix[k][0], N, MPI_FLOAT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&matrix[k][0], N, MPI_FLOAT, k % size, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         // 进行消元操作
         int begin = N / size * size + rank < N ? N / size * size + rank : N / size * size + rank - size;
@@ -234,6 +238,76 @@ double calculate_MPI_cycle() {
     end_time = MPI_Wtime();
     return (end_time - start_time) * 1000;
 }
+
+// MPI pipeline 并行算法
+double calculate_MPI_pipeline()
+{
+    double start_time, end_time;
+
+    int rank;
+    int size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    // 只有是0号进程，才进行初始化工作
+    if (rank == 0) {
+        init_matrix();
+    }
+    start_time = MPI_Wtime();
+    int task_num = rank < N % size ? N / size + 1 : N / size;
+    // 0号进程负责任务的初始分发工作
+    float *buff = new float[task_num * N];
+    if (rank == 0) {
+        for (int p = 1; p < size; p++) {
+            for (int i = p; i < N; i += size) {
+                for (int j = 0; j < N; j++) {
+                    buff[i / size * N + j] = matrix[i][j];
+                }
+            }
+            int count = p < N % size ? N / size + 1 : N / size;
+            MPI_Send(buff, count * N, MPI_FLOAT, p, 0, MPI_COMM_WORLD);
+        }
+    }
+        // 非0号进程负责任务的接收工作
+    else {
+        MPI_Recv(&matrix[rank][0], task_num * N, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        for (int i = 0; i < task_num; i++) {
+            for(int j = 0; j < N; j++){
+                matrix[rank + i * size][j] = matrix[rank + i][j];
+            }
+        }
+    }
+    // 做消元运算
+    int pre_proc = (rank + (size - 1)) % size;
+    int next_proc = (rank + 1) % size;
+    for (int k = 0; k < N; k++) {
+        // 如果除法操作是本进程负责的任务，并将除法结果广播
+        if (k % size == rank) {
+            for (int j = k + 1; j < N; j++) {
+                matrix[k][j] /= matrix[k][k];
+            }
+            matrix[k][k] = 1;
+            MPI_Send(&matrix[k][0], N, MPI_FLOAT, next_proc, 1, MPI_COMM_WORLD);
+        }
+            // 其余进程接收除法行的结果
+        else {
+            MPI_Recv(&matrix[k][0], N, MPI_FLOAT, pre_proc, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            if(next_proc != k % size){
+                MPI_Send(&matrix[k][0], N, MPI_FLOAT, next_proc, 1, MPI_COMM_WORLD);
+            }
+        }
+        // 进行消元操作
+        int begin = N / size * size + rank < N ? N / size * size + rank : N / size * size + rank - size;
+        for (int i = begin; i > k; i -= size) {
+            for (int j = k + 1; j < N; j++) {
+                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+            }
+            matrix[i][k] = 0;
+        }
+    }
+    end_time = MPI_Wtime();
+    return (end_time - start_time) * 1000;
+}
+
 
 // 打印矩阵
 void print_matrix() {
@@ -250,12 +324,12 @@ void test(int n) {
     N = n;
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-//    cout << "=================================== " << N << " ===================================" << endl;
+    cout << "=================================== " << N << " ===================================" << endl;
     struct timeval start{};
     struct timeval end{};
     double time = 0;
     init_data();
-//    // ====================================== serial ======================================
+    // ====================================== serial ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++) {
         init_matrix();
@@ -268,16 +342,16 @@ void test(int n) {
         cout << "serial:" << time / LOOP << "ms" << endl;
         print_result(time);
     }
-//    // ====================================== MPI_block ======================================
-//    time = 0;
-//    for (int i = 0; i < LOOP; i++) {
-//        time += calculate_MPI_block();
-//    }
-//    if (rank == 0) {
-//        cout << "MPI_block:" << time / LOOP << "ms" << endl;
-//        print_result(time);
-//    }
-//    // ====================================== MPI_cycle ======================================
+    // ====================================== MPI_block ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++) {
+        time += calculate_MPI_block();
+    }
+    if (rank == 0) {
+        cout << "MPI_block:" << time / LOOP << "ms" << endl;
+        print_result(time);
+    }
+    // ====================================== MPI_cycle ======================================
     time = 0;
     for (int i = 0; i < LOOP; i++) {
         time += calculate_MPI_cycle();
@@ -286,8 +360,15 @@ void test(int n) {
         cout << "MPI_cycle:" << time / LOOP << "ms" << endl;
         print_result(time);
     }
-
-//    calculate_MPI_cycle();
+    // ====================================== MPI_cycle ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++) {
+        time += calculate_MPI_pipeline();
+    }
+    if (rank == 0) {
+        cout << "MPI_pipeline:" << time / LOOP << "ms" << endl;
+        print_result(time);
+    }
 }
 
 // 结果打印
