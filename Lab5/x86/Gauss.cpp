@@ -3,6 +3,7 @@
 #include <fstream>
 #include <cmath>
 #include <sys/time.h>
+#include <xmmintrin.h> // SSE
 
 
 //#define _PRINT
@@ -16,6 +17,8 @@ const int L = 100;
 const int LOOP = 1;
 float **origin_data;
 float **matrix = nullptr;
+
+int NUM_THREADS = 8;
 
 ofstream res_stream;
 
@@ -31,18 +34,24 @@ double calculate_MPI_cycle();
 
 double calculate_MPI_pipeline();
 
+double calculate_MPI_SIMD();
+
+double calculate_MPI_OMP();
+
+double calculate_MPI_OMP_SIMD();
+
 void print_matrix();
 
 void test(int);
 
 void print_result(double);
 
-int main(int argc, char **argv) {
+int main() {
     MPI_Init(nullptr, nullptr);
 #ifdef _TEST
     res_stream.open("result.csv", ios::out);
     for (int i = 1000; i <= 1000; i += 100)
-        test(i);
+        test(2000);
 //    for (int i = 1000; i <= 3000; i += 500)
 //        test(i);
     res_stream.close();
@@ -57,7 +66,7 @@ int main(int argc, char **argv) {
 // 初始化数据
 void init_data() {
     origin_data = new float *[N], matrix = new float *[N];
-    float *tmp = new float[N * N];
+    auto *tmp = new float[N * N];
     for (int i = 0; i < N; i++) {
         origin_data[i] = new float[N], matrix[i] = tmp + i * N;
     }
@@ -187,7 +196,7 @@ double calculate_MPI_cycle() {
     start_time = MPI_Wtime();
     int task_num = rank < N % size ? N / size + 1 : N / size;
     // 0号进程负责任务的初始分发工作
-    float *buff = new float[task_num * N];
+    auto *buff = new float[task_num * N];
     if (rank == 0) {
         for (int p = 1; p < size; p++) {
             for (int i = p; i < N; i += size) {
@@ -203,7 +212,7 @@ double calculate_MPI_cycle() {
     else {
         MPI_Recv(&matrix[rank][0], task_num * N, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         for (int i = 0; i < task_num; i++) {
-            for(int j = 0; j < N; j++){
+            for (int j = 0; j < N; j++) {
                 matrix[rank + i * size][j] = matrix[rank + i][j];
             }
         }
@@ -240,8 +249,7 @@ double calculate_MPI_cycle() {
 }
 
 // MPI pipeline 并行算法
-double calculate_MPI_pipeline()
-{
+double calculate_MPI_pipeline() {
     double start_time, end_time;
 
     int rank;
@@ -255,7 +263,7 @@ double calculate_MPI_pipeline()
     start_time = MPI_Wtime();
     int task_num = rank < N % size ? N / size + 1 : N / size;
     // 0号进程负责任务的初始分发工作
-    float *buff = new float[task_num * N];
+    auto *buff = new float[task_num * N];
     if (rank == 0) {
         for (int p = 1; p < size; p++) {
             for (int i = p; i < N; i += size) {
@@ -271,7 +279,7 @@ double calculate_MPI_pipeline()
     else {
         MPI_Recv(&matrix[rank][0], task_num * N, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         for (int i = 0; i < task_num; i++) {
-            for(int j = 0; j < N; j++){
+            for (int j = 0; j < N; j++) {
                 matrix[rank + i * size][j] = matrix[rank + i][j];
             }
         }
@@ -291,7 +299,7 @@ double calculate_MPI_pipeline()
             // 其余进程接收除法行的结果
         else {
             MPI_Recv(&matrix[k][0], N, MPI_FLOAT, pre_proc, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            if(next_proc != k % size){
+            if (next_proc != k % size) {
                 MPI_Send(&matrix[k][0], N, MPI_FLOAT, next_proc, 1, MPI_COMM_WORLD);
             }
         }
@@ -308,6 +316,282 @@ double calculate_MPI_pipeline()
     return (end_time - start_time) * 1000;
 }
 
+// MPI SIMD 并行算法
+double calculate_MPI_SIMD() {
+    double start_time, end_time;
+
+    int rank;
+    int size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    // 只有是0号进程，才进行初始化工作
+    if (rank == 0) {
+        init_matrix();
+    }
+    start_time = MPI_Wtime();
+    int task_num = rank < N % size ? N / size + 1 : N / size;
+    // 0号进程负责任务的初始分发工作
+    auto *buff = new float[task_num * N];
+    if (rank == 0) {
+        for (int p = 1; p < size; p++) {
+            for (int i = p; i < N; i += size) {
+                for (int j = 0; j < N; j++) {
+                    buff[i / size * N + j] = matrix[i][j];
+                }
+            }
+            int count = p < N % size ? N / size + 1 : N / size;
+            MPI_Send(buff, count * N, MPI_FLOAT, p, 0, MPI_COMM_WORLD);
+        }
+    }
+        // 非0号进程负责任务的接收工作
+    else {
+        MPI_Recv(&matrix[rank][0], task_num * N, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        for (int i = 0; i < task_num; i++) {
+            for (int j = 0; j < N; j++) {
+                matrix[rank + i * size][j] = matrix[rank + i][j];
+            }
+        }
+    }
+    // 做消元运算
+    for (int k = 0; k < N; k++) {
+        // 如果除法操作是本进程负责的任务，并将除法结果广播
+        if (k % size == rank) {
+            // float Akk = matrix[k][k];
+            __m128 Akk = _mm_set_ps1(matrix[k][k]);
+            int j;
+            // 并行处理
+            for (j = k + 1; j + 3 < N; j += 4)
+            {
+                // float Akj = matrix[k][j];
+                __m128 Akj = _mm_loadu_ps(matrix[k] + j);
+                // Akj = Akj / Akk;
+                Akj = _mm_div_ps(Akj, Akk);
+                // Akj = matrix[k][j];
+                _mm_storeu_ps(matrix[k] + j, Akj);
+            }
+            // 串行处理结尾
+            for (; j < N; j++)
+            {
+                matrix[k][j] = matrix[k][j] / matrix[k][k];
+            }
+            matrix[k][k] = 1;
+            for (int p = 0; p < size; p++) {
+                if (p != rank) {
+                    MPI_Send(&matrix[k][0], N, MPI_FLOAT, p, 1, MPI_COMM_WORLD);
+                }
+            }
+        }
+            // 其余进程接收除法行的结果
+        else {
+            MPI_Recv(&matrix[k][0], N, MPI_FLOAT, k % size, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        // 进行消元操作
+        int begin = N / size * size + rank < N ? N / size * size + rank : N / size * size + rank - size;
+        for (int i = begin; i > k; i -= size) {
+            // float Aik = matrix[i][k];
+            __m128 Aik = _mm_set_ps1(matrix[i][k]);
+            int j;
+            for (j = k + 1; j + 3 < N; j += 4)
+            {
+                // float Akj = matrix[k][j];
+                __m128 Akj = _mm_loadu_ps(matrix[k] + j);
+                // float Aij = matrix[i][j];
+                __m128 Aij = _mm_loadu_ps(matrix[i] + j);
+                // AikMulAkj = matrix[i][k] * matrix[k][j];
+                __m128 AikMulAkj = _mm_mul_ps(Aik, Akj);
+                // Aij = Aij - AikMulAkj;
+                Aij = _mm_sub_ps(Aij, AikMulAkj);
+                // matrix[i][j] = Aij;
+                _mm_storeu_ps(matrix[i] + j, Aij);
+            }
+            // 串行处理结尾
+            for (; j < N; j++)
+            {
+                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+            }
+            matrix[i][k] = 0;
+        }
+    }
+    end_time = MPI_Wtime();
+    return (end_time - start_time) * 1000;
+}
+
+// MPI OMP 并行算法
+double calculate_MPI_OMP() {
+    double start_time, end_time;
+
+    int rank;
+    int size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    // 只有是0号进程，才进行初始化工作
+    if (rank == 0) {
+        init_matrix();
+    }
+    start_time = MPI_Wtime();
+    int task_num = rank < N % size ? N / size + 1 : N / size;
+    // 0号进程负责任务的初始分发工作
+    auto *buff = new float[task_num * N];
+    if (rank == 0) {
+        for (int p = 1; p < size; p++) {
+            for (int i = p; i < N; i += size) {
+                for (int j = 0; j < N; j++) {
+                    buff[i / size * N + j] = matrix[i][j];
+                }
+            }
+            int count = p < N % size ? N / size + 1 : N / size;
+            MPI_Send(buff, count * N, MPI_FLOAT, p, 0, MPI_COMM_WORLD);
+        }
+    }
+        // 非0号进程负责任务的接收工作
+    else {
+        MPI_Recv(&matrix[rank][0], task_num * N, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        for (int i = 0; i < task_num; i++) {
+            for (int j = 0; j < N; j++) {
+                matrix[rank + i * size][j] = matrix[rank + i][j];
+            }
+        }
+    }
+    // 做消元运算
+    int i,j,k;
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k) shared(matrix, N, size, rank)
+    for (k = 0; k < N; k++) {
+        // 如果除法操作是本进程负责的任务，并将除法结果广播
+#pragma omp single
+        {
+            if (k % size == rank) {
+                    for (j = k + 1; j < N; j++) {
+                        matrix[k][j] /= matrix[k][k];
+                    }
+                    matrix[k][k] = 1;
+                    for (int p = 0; p < size; p++) {
+                        if (p != rank) {
+                            MPI_Send(&matrix[k][0], N, MPI_FLOAT, p, 1, MPI_COMM_WORLD);
+                        }
+                    }
+                }
+                // 其余进程接收除法行的结果
+            else {
+                MPI_Recv(&matrix[k][0], N, MPI_FLOAT, k % size, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
+        }
+        // 进行消元操作
+        int begin = N / size * size + rank < N ? N / size * size + rank : N / size * size + rank - size;
+#pragma omp for schedule(simd : guided)
+        for (i = begin; i > k; i -= size) {
+            for (j = k + 1; j < N; j++) {
+                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+            }
+            matrix[i][k] = 0;
+        }
+    }
+    end_time = MPI_Wtime();
+    return (end_time - start_time) * 1000;
+}
+
+// MPI OMP SIMD 并行算法
+double calculate_MPI_OMP_SIMD(){
+    double start_time, end_time;
+
+    int rank;
+    int size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    // 只有是0号进程，才进行初始化工作
+    if (rank == 0) {
+        init_matrix();
+    }
+    start_time = MPI_Wtime();
+    int task_num = rank < N % size ? N / size + 1 : N / size;
+    // 0号进程负责任务的初始分发工作
+    auto *buff = new float[task_num * N];
+    if (rank == 0) {
+        for (int p = 1; p < size; p++) {
+            for (int i = p; i < N; i += size) {
+                for (int j = 0; j < N; j++) {
+                    buff[i / size * N + j] = matrix[i][j];
+                }
+            }
+            int count = p < N % size ? N / size + 1 : N / size;
+            MPI_Send(buff, count * N, MPI_FLOAT, p, 0, MPI_COMM_WORLD);
+        }
+    }
+        // 非0号进程负责任务的接收工作
+    else {
+        MPI_Recv(&matrix[rank][0], task_num * N, MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        for (int i = 0; i < task_num; i++) {
+            for (int j = 0; j < N; j++) {
+                matrix[rank + i * size][j] = matrix[rank + i][j];
+            }
+        }
+    }
+    // 做消元运算
+    int i,j,k;
+#pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k) shared(matrix, N, size, rank)
+    for (k = 0; k < N; k++) {
+        // 如果除法操作是本进程负责的任务，并将除法结果广播
+#pragma omp single
+        {
+            if (k % size == rank) {
+                // float Akk = matrix[k][k];
+                __m128 Akk = _mm_set_ps1(matrix[k][k]);
+                // 并行处理
+                for (j = k + 1; j + 3 < N; j += 4)
+                {
+                    // float Akj = matrix[k][j];
+                    __m128 Akj = _mm_loadu_ps(matrix[k] + j);
+                    // Akj = Akj / Akk;
+                    Akj = _mm_div_ps(Akj, Akk);
+                    // Akj = matrix[k][j];
+                    _mm_storeu_ps(matrix[k] + j, Akj);
+                }
+                // 串行处理结尾
+                for (; j < N; j++)
+                {
+                    matrix[k][j] = matrix[k][j] / matrix[k][k];
+                }
+                matrix[k][k] = 1;
+                for (int p = 0; p < size; p++) {
+                    if (p != rank) {
+                        MPI_Send(&matrix[k][0], N, MPI_FLOAT, p, 1, MPI_COMM_WORLD);
+                    }
+                }
+            }
+                // 其余进程接收除法行的结果
+            else {
+                MPI_Recv(&matrix[k][0], N, MPI_FLOAT, k % size, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
+        }
+        // 进行消元操作
+        int begin = N / size * size + rank < N ? N / size * size + rank : N / size * size + rank - size;
+#pragma omp for schedule(simd : guided)
+        for (i = begin; i > k; i -= size) {
+            // float Aik = matrix[i][k];
+            __m128 Aik = _mm_set_ps1(matrix[i][k]);
+            for (j = k + 1; j + 3 < N; j += 4)
+            {
+                // float Akj = matrix[k][j];
+                __m128 Akj = _mm_loadu_ps(matrix[k] + j);
+                // float Aij = matrix[i][j];
+                __m128 Aij = _mm_loadu_ps(matrix[i] + j);
+                // AikMulAkj = matrix[i][k] * matrix[k][j];
+                __m128 AikMulAkj = _mm_mul_ps(Aik, Akj);
+                // Aij = Aij - AikMulAkj;
+                Aij = _mm_sub_ps(Aij, AikMulAkj);
+                // matrix[i][j] = Aij;
+                _mm_storeu_ps(matrix[i] + j, Aij);
+            }
+            // 串行处理结尾
+            for (; j < N; j++)
+            {
+                matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
+            }
+            matrix[i][k] = 0;
+        }
+    }
+    end_time = MPI_Wtime();
+    return (end_time - start_time) * 1000;
+}
 
 // 打印矩阵
 void print_matrix() {
@@ -367,6 +651,33 @@ void test(int n) {
     }
     if (rank == 0) {
         cout << "MPI_pipeline:" << time / LOOP << "ms" << endl;
+        print_result(time);
+    }
+    // ====================================== MPI_SIMD ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++) {
+        time += calculate_MPI_SIMD();
+    }
+    if (rank == 0) {
+        cout << "MPI_SIMD:" << time / LOOP << "ms" << endl;
+        print_result(time);
+    }
+    // ====================================== MPI_OMP ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++) {
+        time += calculate_MPI_OMP();
+    }
+    if (rank == 0) {
+        cout << "MPI_OMP:" << time / LOOP << "ms" << endl;
+        print_result(time);
+    }
+    // ====================================== MPI_OMP_SIMD ======================================
+    time = 0;
+    for (int i = 0; i < LOOP; i++) {
+        time += calculate_MPI_OMP_SIMD();
+    }
+    if (rank == 0) {
+        cout << "MPI_OMP_SIMD:" << time / LOOP << "ms" << endl;
         print_result(time);
     }
 }
