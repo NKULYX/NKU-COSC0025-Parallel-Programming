@@ -6,6 +6,7 @@
 #include <arm_neon.h>
 
 
+
 //#define _PRINT
 #define _TEST
 
@@ -14,7 +15,7 @@ using namespace std;
 // ============================================== 运算变量 ==============================================
 int N;
 const int L = 100;
-const int LOOP = 1;
+int LOOP = 1;
 float **origin_data;
 float **matrix = nullptr;
 
@@ -50,10 +51,12 @@ int main() {
     MPI_Init(nullptr, nullptr);
 #ifdef _TEST
     res_stream.open("result.csv", ios::out);
-    for (int i = 1000; i <= 1000; i += 100)
-        test(2000);
-//    for (int i = 1000; i <= 3000; i += 500)
-//        test(i);
+    LOOP=50;
+    for (int i = 100; i < 1000; i += 100)
+        test(i);
+    LOOP = 5;
+    for (int i = 1000; i <= 3000; i += 500)
+        test(i);
     res_stream.close();
 #endif
 #ifdef _PRINT
@@ -444,7 +447,7 @@ double calculate_MPI_OMP() {
         }
     }
     // 做消元运算
-    int i,j,k;
+    int i, j, k;
 #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k) shared(matrix, N, size, rank)
     for (k = 0; k < N; k++) {
         // 如果除法操作是本进程负责的任务，并将除法结果广播
@@ -590,7 +593,10 @@ void test(int n) {
     N = n;
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    cout << "=================================== " << N << " ===================================" << endl;
+    if (rank == 0) {
+        cout << "=================================== " << N << " ===================================" << endl;
+        res_stream << N;
+    }
     struct timeval start{};
     struct timeval end{};
     double time = 0;
@@ -661,6 +667,9 @@ void test(int n) {
     if (rank == 0) {
         cout << "MPI_OMP_SIMD:" << time / LOOP << "ms" << endl;
         print_result(time);
+    }
+    if (rank == 0) {
+        res_stream << endl;
     }
 }
 

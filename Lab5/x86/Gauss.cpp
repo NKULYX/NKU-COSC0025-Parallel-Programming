@@ -14,7 +14,7 @@ using namespace std;
 // ============================================== 运算变量 ==============================================
 int N;
 const int L = 100;
-const int LOOP = 1;
+int LOOP = 1;
 float **origin_data;
 float **matrix = nullptr;
 
@@ -50,10 +50,12 @@ int main() {
     MPI_Init(nullptr, nullptr);
 #ifdef _TEST
     res_stream.open("result.csv", ios::out);
-    for (int i = 1000; i <= 1000; i += 100)
-        test(2000);
-//    for (int i = 1000; i <= 3000; i += 500)
-//        test(i);
+    LOOP=50;
+    for (int i = 100; i < 1000; i += 100)
+        test(i);
+    LOOP = 5;
+    for (int i = 1000; i <= 3000; i += 500)
+        test(i);
     res_stream.close();
 #endif
 #ifdef _PRINT
@@ -360,8 +362,7 @@ double calculate_MPI_SIMD() {
             __m128 Akk = _mm_set_ps1(matrix[k][k]);
             int j;
             // 并行处理
-            for (j = k + 1; j + 3 < N; j += 4)
-            {
+            for (j = k + 1; j + 3 < N; j += 4) {
                 // float Akj = matrix[k][j];
                 __m128 Akj = _mm_loadu_ps(matrix[k] + j);
                 // Akj = Akj / Akk;
@@ -370,8 +371,7 @@ double calculate_MPI_SIMD() {
                 _mm_storeu_ps(matrix[k] + j, Akj);
             }
             // 串行处理结尾
-            for (; j < N; j++)
-            {
+            for (; j < N; j++) {
                 matrix[k][j] = matrix[k][j] / matrix[k][k];
             }
             matrix[k][k] = 1;
@@ -391,8 +391,7 @@ double calculate_MPI_SIMD() {
             // float Aik = matrix[i][k];
             __m128 Aik = _mm_set_ps1(matrix[i][k]);
             int j;
-            for (j = k + 1; j + 3 < N; j += 4)
-            {
+            for (j = k + 1; j + 3 < N; j += 4) {
                 // float Akj = matrix[k][j];
                 __m128 Akj = _mm_loadu_ps(matrix[k] + j);
                 // float Aij = matrix[i][j];
@@ -405,8 +404,7 @@ double calculate_MPI_SIMD() {
                 _mm_storeu_ps(matrix[i] + j, Aij);
             }
             // 串行处理结尾
-            for (; j < N; j++)
-            {
+            for (; j < N; j++) {
                 matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
             }
             matrix[i][k] = 0;
@@ -453,23 +451,23 @@ double calculate_MPI_OMP() {
         }
     }
     // 做消元运算
-    int i,j,k;
+    int i, j, k;
 #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k) shared(matrix, N, size, rank)
     for (k = 0; k < N; k++) {
         // 如果除法操作是本进程负责的任务，并将除法结果广播
 #pragma omp single
         {
             if (k % size == rank) {
-                    for (j = k + 1; j < N; j++) {
-                        matrix[k][j] /= matrix[k][k];
-                    }
-                    matrix[k][k] = 1;
-                    for (int p = 0; p < size; p++) {
-                        if (p != rank) {
-                            MPI_Send(&matrix[k][0], N, MPI_FLOAT, p, 1, MPI_COMM_WORLD);
-                        }
+                for (j = k + 1; j < N; j++) {
+                    matrix[k][j] /= matrix[k][k];
+                }
+                matrix[k][k] = 1;
+                for (int p = 0; p < size; p++) {
+                    if (p != rank) {
+                        MPI_Send(&matrix[k][0], N, MPI_FLOAT, p, 1, MPI_COMM_WORLD);
                     }
                 }
+            }
                 // 其余进程接收除法行的结果
             else {
                 MPI_Recv(&matrix[k][0], N, MPI_FLOAT, k % size, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -490,7 +488,7 @@ double calculate_MPI_OMP() {
 }
 
 // MPI OMP SIMD 并行算法
-double calculate_MPI_OMP_SIMD(){
+double calculate_MPI_OMP_SIMD() {
     double start_time, end_time;
 
     int rank;
@@ -526,7 +524,7 @@ double calculate_MPI_OMP_SIMD(){
         }
     }
     // 做消元运算
-    int i,j,k;
+    int i, j, k;
 #pragma omp parallel num_threads(NUM_THREADS) default(none) private(i, j, k) shared(matrix, N, size, rank)
     for (k = 0; k < N; k++) {
         // 如果除法操作是本进程负责的任务，并将除法结果广播
@@ -536,8 +534,7 @@ double calculate_MPI_OMP_SIMD(){
                 // float Akk = matrix[k][k];
                 __m128 Akk = _mm_set_ps1(matrix[k][k]);
                 // 并行处理
-                for (j = k + 1; j + 3 < N; j += 4)
-                {
+                for (j = k + 1; j + 3 < N; j += 4) {
                     // float Akj = matrix[k][j];
                     __m128 Akj = _mm_loadu_ps(matrix[k] + j);
                     // Akj = Akj / Akk;
@@ -546,8 +543,7 @@ double calculate_MPI_OMP_SIMD(){
                     _mm_storeu_ps(matrix[k] + j, Akj);
                 }
                 // 串行处理结尾
-                for (; j < N; j++)
-                {
+                for (; j < N; j++) {
                     matrix[k][j] = matrix[k][j] / matrix[k][k];
                 }
                 matrix[k][k] = 1;
@@ -568,8 +564,7 @@ double calculate_MPI_OMP_SIMD(){
         for (i = begin; i > k; i -= size) {
             // float Aik = matrix[i][k];
             __m128 Aik = _mm_set_ps1(matrix[i][k]);
-            for (j = k + 1; j + 3 < N; j += 4)
-            {
+            for (j = k + 1; j + 3 < N; j += 4) {
                 // float Akj = matrix[k][j];
                 __m128 Akj = _mm_loadu_ps(matrix[k] + j);
                 // float Aij = matrix[i][j];
@@ -582,8 +577,7 @@ double calculate_MPI_OMP_SIMD(){
                 _mm_storeu_ps(matrix[i] + j, Aij);
             }
             // 串行处理结尾
-            for (; j < N; j++)
-            {
+            for (; j < N; j++) {
                 matrix[i][j] = matrix[i][j] - matrix[i][k] * matrix[k][j];
             }
             matrix[i][k] = 0;
@@ -608,7 +602,10 @@ void test(int n) {
     N = n;
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    cout << "=================================== " << N << " ===================================" << endl;
+    if (rank == 0) {
+        cout << "=================================== " << N << " ===================================" << endl;
+        res_stream << N;
+    }
     struct timeval start{};
     struct timeval end{};
     double time = 0;
@@ -679,6 +676,9 @@ void test(int n) {
     if (rank == 0) {
         cout << "MPI_OMP_SIMD:" << time / LOOP << "ms" << endl;
         print_result(time);
+    }
+    if (rank == 0) {
+        res_stream << endl;
     }
 }
 
