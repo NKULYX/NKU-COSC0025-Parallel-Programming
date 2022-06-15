@@ -3,7 +3,7 @@
 //
 
 #include <iostream>
-#include "KMeans.h"
+#include "src/KMeans.h"
 using namespace std;
 int main()
 {

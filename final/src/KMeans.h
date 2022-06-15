@@ -29,7 +29,7 @@ public:
     KMeans(int K, int L, string method = "normal");
     ~KMeans();
     void initData(float**,int,int);
-    float** getTestData(int,int);
+    static float** getTestData(int,int,int);
     void fit();
     void printResult();
 

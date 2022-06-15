@@ -181,15 +181,15 @@ float KMeans::calculateDistance(float *data, float *centroid) {
  * @param d: the dimension of data
  * @return: the test data
  */
-float **KMeans::getTestData(int n, int d) {
+float **KMeans::getTestData(int n, int d, int k) {
     auto** tmpData = new float*[n];
     for(int i = 0; i < n; i++)
         tmpData[i] = new float[d];
     default_random_engine e;
     uniform_real_distribution<float> u1(0, 1000);
     uniform_real_distribution<float> u2(-50, 50);
-    int step = n / this->K + 1;
-    for(int i=0;i<this->K;i++){
+    int step = n / k + 1;
+    for(int i=0;i<k;i++){
         auto* tmpCenter = new float[d];
         for(int j=0;j<d;j++)
             tmpCenter[j] = u1(e);
