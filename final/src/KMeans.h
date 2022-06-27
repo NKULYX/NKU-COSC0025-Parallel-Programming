@@ -1,45 +1,49 @@
-#ifndef KMEANS_H
-#define KMEANS_H
+/*
+ * Created by TTATT on 2022/6/17.
+ * This class is the base class for KMeans
+ * It provides the basic member variables and member functions
+ */
 
-#include <string>
-using namespace std;
+#ifndef FINAL_KMEANS_H
+#define FINAL_KMEANS_H
 
 class KMeans {
-    float **data;      // 数据
-    int N;         // 数据量
-    int D;         // 数据维度
-    int K;         // 聚类数量
-    int L;         // 迭代轮数
-    float **centroids; // 质心
-    int *clusterCount; // 每个数据所属的聚类
-    int *clusterLabels;  // 聚类标签
-    int method;    // 优化方法
+
+    virtual void calculate() = 0;
+
+    virtual void updateCentroids() = 0;
+
+
+protected:
+    float **data{};                     // the description of data
+    int N{};                            // the number of the data
+    int D{};                            // the dimension of the data
+    int K{};                              // the number of centroids
+    int L = 500;                        // the loop for iteration
+    float **centroids{};                // the description of centroids
+    int *clusterCount{};                  // the number of data in each cluster
+    int *clusterLabels{};               // the label of cluster
+    int method;                         // optimize method
+
     void initCentroidsRandom();
-    void initCentroidsOptimize();
-    void calculateSerial();
-    void updateCentroids();
-    float calculateDistance(float*, float*);
-    void fitNormal();
-    void fitKMeansPlusPlus();
-    void fitSIMD();
-    void fitPthread();
-    void fitOMP();
+
+    float calculateDistance(const float *, const float *) const;
 
 public:
-    KMeans(int K, int L, string method = "normal");
+    KMeans(int k);
+
+    KMeans(int k, int method);
+
     ~KMeans();
-    void initData(float**,int,int);
-    static float** getTestData(int,int,int);
-    void fit();
+
+    void initData(float ** data, int n, int d);
+
+    virtual void fit() {};
+
     void printResult();
 
-
+    int getClusterNumber();
 };
 
 
-
-
-
-
-
-#endif // KMEANS_H
+#endif //FINAL_KMEANS_H
