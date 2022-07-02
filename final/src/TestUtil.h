@@ -8,13 +8,14 @@
 
 #include "KMeans.h"
 #include <fstream>
+#include <vector>
 
 class TestUtil {
     static float **getTestData(int n, int d, int k);
     static double getTestTime(KMeans& kmeans, float** testData, int n, int d);
-    static void outputResult(int n, int d, int k, double time, std::fstream& result);
 public:
-    static void runTest(KMeans& kmeans);
+    static void runSystemTest(std::vector<KMeans*> kmeansList);
+    static void runUnitTest(KMeans& kmeans);
 };
 
 

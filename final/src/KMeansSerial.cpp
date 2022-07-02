@@ -6,11 +6,18 @@
 
 #include <cstring>
 
-KMeansSerial::KMeansSerial(int K, int method) : KMeans(K, method) {
+KMeansSerial::KMeansSerial(int k, int method) : KMeans(k, method) {
 }
 
 KMeansSerial::~KMeansSerial() = default;
 
+/*
+ * the function to execute cluster process
+ * first initial the centroids
+ * then iterate over the loop
+ * calculate the nearest centroid of each point and change the cluster labels
+ * last update the centroids
+ */
 void KMeansSerial::fit() {
     initCentroidsRandom();
     for(int i=0; i<this->L;i++){
@@ -20,7 +27,7 @@ void KMeansSerial::fit() {
 }
 
 /*
- * calculate serially
+ * calculate the nearest centroid of each point serially
  */
 void KMeansSerial::calculate() {
     for(int i=0;i<this->N;i++){
@@ -57,4 +64,8 @@ void KMeansSerial::updateCentroids() {
             this->centroids[i][j] /= (float)this->clusterCount[i];
         }
     }
+}
+
+void KMeansSerial::changeMemory() {
+
 }

@@ -56,6 +56,7 @@ void KMeans::initData(float** inputData, int n, int d) {
             this->data[i][j] = inputData[i][j];
     }
     this->clusterLabels = new int[this->N];
+    changeMemory();
 }
 
 
@@ -64,17 +65,25 @@ void KMeans::printResult() {
         cout << "Cluster " << i << ": " << this->clusterCount[i] << " points" << endl;
 }
 
-int KMeans::getClusterNumber(){
+int KMeans::getClusterNumber() const{
     return this->K;
 }
 
 KMeans::~KMeans() {
-    for(int i = 0; i < this->N; i++)
-        delete[] data[i];
-    delete[] data;
-    for(int i = 0; i < this->K; i++)
-        delete[] centroids[i];
-    delete[] centroids;
-    delete[] clusterLabels;
-    delete[] clusterCount;
+    if(data!=nullptr){
+        for(int i = 0; i < this->N; i++)
+            delete[] data[i];
+        delete[] data;
+    }
+    if(centroids!=nullptr){
+        for(int i = 0; i < this->K; i++)
+            delete[] centroids[i];
+        delete[] centroids;
+    }
+    if(clusterLabels!=nullptr){
+        delete[] clusterLabels;
+    }
+    if(clusterCount!=nullptr){
+        delete[] clusterCount;
+    }
 }

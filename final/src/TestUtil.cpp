@@ -7,33 +7,33 @@
 #include <sys/time.h>
 #include <iostream>
 
-//#define _SYSTEM_TEST_
-#define _UNIT_TEST_
-
 using namespace std;
 
-void TestUtil::runTest(KMeans& kmeans){
-#ifdef _UNIT_TEST_
+void TestUtil::runUnitTest(KMeans& kmeans) {
     int k = kmeans.getClusterNumber();
-    int n = 10 * k;
-    int d = 5;
+    int n = 1000;
+    int d = 1000;
     float** testData = getTestData(n,d,k);
     double time = getTestTime(kmeans, testData, n, d);
     cout << time << "ms" << endl;
-    kmeans.printResult();
-#else
-    fstream result;
-    result.open("result.csv");
+}
+
+void TestUtil::runSystemTest(std::vector<KMeans*> kmeansList){
+    ofstream result("./result.csv");
     result<<"N"<<","<<"D"<<","<<"K"<<","<<"time"<<endl;
-    for(int n = 100; n <= 1000; n++){
-        for(int d = 2; d < 10; d++){
-            float** testData = getTestData(n,d,kmeans.getClusterNumber());
-            double time = getTestTime(kmeans, n ,d);
-            outputResult(n, d, k, time, result);
+    for(int n = 500, d = 500; n <= 4000 && d <= 4000; n+=500, d+=500 ){
+        result << n << "," << d;
+        cout << n << "," << d;
+        float** testData = getTestData(n, d, (*kmeansList.begin())->getClusterNumber());
+        for(auto& kmeans : kmeansList){
+            double time = getTestTime(*kmeans, testData, n, d);
+            result << "," << time;
+            cout << ","  << time;
         }
+        result << endl;
+        cout << endl;
     }
     result.close();
-#endif
 }
 
 /*
@@ -63,7 +63,8 @@ float **TestUtil::getTestData(int n, int d, int k) {
 }
 
 double TestUtil::getTestTime(KMeans& kmeans, float** testData, int n, int d){
-    int loop = n * d < 10000 ? 50 : 5;
+//    int loop = n * d < 10000 ? 10 : 1;
+    int loop = 1;
     struct timeval start{};
     struct timeval end{};
     double time = 0;
@@ -75,8 +76,4 @@ double TestUtil::getTestTime(KMeans& kmeans, float** testData, int n, int d){
         time += ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) * 1.0 / 1000;
     }
     return time / loop;
-}
-
-void TestUtil::outputResult(int n, int d, int k, double time, std::fstream& result){
-    result << n << d << k << time << endl;
 }
