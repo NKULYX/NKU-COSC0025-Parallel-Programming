@@ -12,6 +12,10 @@
 KMeansSIMD::KMeansSIMD(int k, int method) : KMeans(k, method) {
 }
 
+/*
+ * change the memory of the data and centroids
+ * in order to call destruct function of ~KMeans()
+ */
 KMeansSIMD::~KMeansSIMD(){
     data = new float*[this->N];
     for(int i = 0; i < this->N; i++)
@@ -73,16 +77,16 @@ void KMeansSIMD::changeMemory() {
  */
 void KMeansSIMD::calculate() {
     switch (method) {
-        case SSE_UNALIGNED:
-        case SSE_ALIGNED:
+        case SIMD_SSE_UNALIGNED:
+        case SIMD_SSE_ALIGNED:
             calculateSSE();
             break;
-        case AVX_UNALIGNED:
-        case AVX_ALIGNED:
+        case SIMD_AVX_UNALIGNED:
+        case SIMD_AVX_ALIGNED:
             calculateAVX();
             break;
-        case AVX512_UNALIGNED:
-        case AVX512_ALIGNED:
+        case SIMD_AVX512_UNALIGNED:
+        case SIMD_AVX512_ALIGNED:
             calculateAVX512();
             break;
         default:
@@ -114,16 +118,16 @@ void KMeansSIMD::calculateSSE() {
 float KMeansSIMD::calculateDistanceSSE(float *dataItem, float *centroidItem) {
     float dis = 0;
     for(int i = 0; i < this->D - this->D % 4; i+=4) {
-        __m128 data, centroid;
-        if(this->method == SSE_UNALIGNED){
-            data = _mm_loadu_ps(&dataItem[i]);
+        __m128 tmpData, centroid;
+        if(this->method == SIMD_SSE_UNALIGNED){
+            tmpData = _mm_loadu_ps(&dataItem[i]);
             centroid = _mm_loadu_ps(&centroidItem[i]);
         }
         else{
-            data = _mm_load_ps(&dataItem[i]);
+            tmpData = _mm_load_ps(&dataItem[i]);
             centroid = _mm_load_ps(&centroidItem[i]);
         }
-        __m128 diff = _mm_sub_ps(data, centroid);
+        __m128 diff = _mm_sub_ps(tmpData, centroid);
         __m128 square = _mm_mul_ps(diff, diff);
         __m128 sum = _mm_hadd_ps(square, square);
         sum = _mm_hadd_ps(sum, sum);
@@ -160,16 +164,16 @@ void KMeansSIMD::calculateAVX() {
 float KMeansSIMD::calculateDistanceAVX(float *dataItem, float *centroidItem) {
     float dis = 0;
     for(int i = 0; i < this->D - this->D % 8; i+=8) {
-        __m256 data, centroid;
-        if(this->method == AVX_UNALIGNED){
-            data = _mm256_loadu_ps(&dataItem[i]);
+        __m256 tmpData, centroid;
+        if(this->method == SIMD_AVX_UNALIGNED){
+            tmpData = _mm256_loadu_ps(&dataItem[i]);
             centroid = _mm256_loadu_ps(&centroidItem[i]);
         }
         else{
-            data = _mm256_load_ps(&dataItem[i]);
+            tmpData = _mm256_load_ps(&dataItem[i]);
             centroid = _mm256_load_ps(&centroidItem[i]);
         }
-        __m256 diff = _mm256_sub_ps(data, centroid);
+        __m256 diff = _mm256_sub_ps(tmpData, centroid);
         __m256 square = _mm256_mul_ps(diff, diff);
         __m256 sum = _mm256_hadd_ps(square, square);
         sum = _mm256_hadd_ps(sum, sum);
@@ -207,16 +211,16 @@ void KMeansSIMD::calculateAVX512() {
 float KMeansSIMD::calculateDistanceAVX512(float *dataItem, float *centroidItem) {
     float dis = 0;
     for(int i = 0; i < this->D - this->D % 16; i+=16) {
-        __m512 data, centroid;
-        if(this->method == AVX512_UNALIGNED){
-            data = _mm512_loadu_ps(&dataItem[i]);
+        __m512 tmpData, centroid;
+        if(this->method == SIMD_AVX512_UNALIGNED){
+            tmpData = _mm512_loadu_ps(&dataItem[i]);
             centroid = _mm512_loadu_ps(&centroidItem[i]);
         }
         else{
-            data = _mm512_load_ps(&dataItem[i]);
+            tmpData = _mm512_load_ps(&dataItem[i]);
             centroid = _mm512_load_ps(&centroidItem[i]);
         }
-        __m512 diff = _mm512_sub_ps(data, centroid);
+        __m512 diff = _mm512_sub_ps(tmpData, centroid);
         __m512 square = _mm512_mul_ps(diff, diff);
         __m128 sum1 = _mm512_extractf32x4_ps(square, 0);
         __m128 sum2 = _mm512_extractf32x4_ps(square, 1);
@@ -241,16 +245,16 @@ float KMeansSIMD::calculateDistanceAVX512(float *dataItem, float *centroidItem) 
  */
 void KMeansSIMD::updateCentroids() {
     switch (method) {
-        case SSE_UNALIGNED:
-        case SSE_ALIGNED:
+        case SIMD_SSE_UNALIGNED:
+        case SIMD_SSE_ALIGNED:
             updateCentroidsSSE();
             break;
-        case AVX_UNALIGNED:
-        case AVX_ALIGNED:
+        case SIMD_AVX_UNALIGNED:
+        case SIMD_AVX_ALIGNED:
             updateCentroidsAVX();
             break;
-        case AVX512_UNALIGNED:
-        case AVX512_ALIGNED:
+        case SIMD_AVX512_UNALIGNED:
+        case SIMD_AVX512_ALIGNED:
             updateCentroidsAVX512();
             break;
         default:
@@ -268,11 +272,11 @@ void KMeansSIMD::updateCentroidsSSE() {
     for(int i=0;i<this->N;i++){
         int cluster = this->clusterLabels[i];
         this->clusterCount[cluster]++;
-        if(method == SSE_UNALIGNED){
+        if(method == SIMD_SSE_UNALIGNED){
             for(int j=0;j<this->D - this->D % 4;j+=4){
-                __m128 data = _mm_loadu_ps(&this->data[i][j]);
+                __m128 tmpData = _mm_loadu_ps(&this->data[i][j]);
                 __m128 centroid = _mm_loadu_ps(&this->centroids[cluster][j]);
-                __m128 sum = _mm_add_ps(data, centroid);
+                __m128 sum = _mm_add_ps(tmpData, centroid);
                 _mm_storeu_ps(&this->centroids[cluster][j], sum);
             }
             for(int j=this->D - this->D % 4;j<this->D;j++){
@@ -281,9 +285,9 @@ void KMeansSIMD::updateCentroidsSSE() {
         }
         else{
             for(int j=0;j<this->D - this->D % 4;j+=4){
-                __m128 data = _mm_load_ps(&this->data[i][j]);
+                __m128 tmpData = _mm_load_ps(&this->data[i][j]);
                 __m128 centroid = _mm_load_ps(&this->centroids[cluster][j]);
-                __m128 sum = _mm_add_ps(data, centroid);
+                __m128 sum = _mm_add_ps(tmpData, centroid);
                 _mm_store_ps(&this->centroids[cluster][j], sum);
             }
             for(int j=this->D - this->D % 4;j<this->D;j++){
@@ -293,11 +297,11 @@ void KMeansSIMD::updateCentroidsSSE() {
     }
     // calculate the mean of the cluster using SSE
     for(int i=0;i<this->K;i++){
-        if(method == SSE_UNALIGNED){
+        if(method == SIMD_SSE_UNALIGNED){
             for(int j=0;j<this->D - this->D % 4;j+=4){
-                __m128 data = _mm_loadu_ps(&this->centroids[i][j]);
+                __m128 tmpData = _mm_loadu_ps(&this->centroids[i][j]);
                 __m128 count = _mm_loadu_ps(reinterpret_cast<const float *>(&this->clusterCount[i]));
-                __m128 mean = _mm_div_ps(data, count);
+                __m128 mean = _mm_div_ps(tmpData, count);
                 _mm_storeu_ps(&this->centroids[i][j], mean);
             }
             for(int j=this->D - this->D % 4;j<this->D;j++){
@@ -306,9 +310,9 @@ void KMeansSIMD::updateCentroidsSSE() {
         }
         else{
             for(int j=0;j<this->D - this->D % 4;j+=4){
-                __m128 data = _mm_load_ps(&this->centroids[i][j]);
+                __m128 tmpData = _mm_load_ps(&this->centroids[i][j]);
                 __m128 count = _mm_loadu_ps(reinterpret_cast<const float *>(&this->clusterCount[i]));
-                __m128 mean = _mm_div_ps(data, count);
+                __m128 mean = _mm_div_ps(tmpData, count);
                 _mm_store_ps(&this->centroids[i][j], mean);
             }
             for(int j=this->D - this->D % 4;j<this->D;j++){
@@ -328,11 +332,11 @@ void KMeansSIMD::updateCentroidsAVX() {
     for(int i=0;i<this->N;i++){
         int cluster = this->clusterLabels[i];
         this->clusterCount[cluster]++;
-        if(method == AVX_UNALIGNED){
+        if(method == SIMD_AVX_UNALIGNED){
             for(int j=0;j<this->D - this->D % 8;j+=8){
-                __m256 data = _mm256_loadu_ps(&this->data[i][j]);
+                __m256 tmpData = _mm256_loadu_ps(&this->data[i][j]);
                 __m256 centroid = _mm256_loadu_ps(&this->centroids[cluster][j]);
-                __m256 sum = _mm256_add_ps(data, centroid);
+                __m256 sum = _mm256_add_ps(tmpData, centroid);
                 _mm256_storeu_ps(&this->centroids[cluster][j], sum);
             }
             for(int j=this->D - this->D % 8;j<this->D;j++){
@@ -341,9 +345,9 @@ void KMeansSIMD::updateCentroidsAVX() {
         }
         else{
             for(int j=0;j<this->D - this->D % 8;j+=8){
-                __m256 data = _mm256_load_ps(&this->data[i][j]);
+                __m256 tmpData = _mm256_load_ps(&this->data[i][j]);
                 __m256 centroid = _mm256_load_ps(&this->centroids[cluster][j]);
-                __m256 sum = _mm256_add_ps(data, centroid);
+                __m256 sum = _mm256_add_ps(tmpData, centroid);
                 _mm256_store_ps(&this->centroids[cluster][j], sum);
             }
             for(int j=this->D - this->D % 8;j<this->D;j++){
@@ -353,11 +357,11 @@ void KMeansSIMD::updateCentroidsAVX() {
     }
     // calculate the mean of the cluster using AVX
     for(int i=0;i<this->K;i++){
-        if(method == AVX_UNALIGNED){
+        if(method == SIMD_AVX_UNALIGNED){
             for(int j=0;j<this->D - this->D % 8;j+=8){
-                __m256 data = _mm256_loadu_ps(&this->centroids[i][j]);
+                __m256 tmpData = _mm256_loadu_ps(&this->centroids[i][j]);
                 __m256 count = _mm256_loadu_ps(reinterpret_cast<const float *>(&this->clusterCount[i]));
-                __m256 mean = _mm256_div_ps(data, count);
+                __m256 mean = _mm256_div_ps(tmpData, count);
                 _mm256_storeu_ps(&this->centroids[i][j], mean);
             }
             for(int j=this->D - this->D % 8;j<this->D;j++){
@@ -366,9 +370,9 @@ void KMeansSIMD::updateCentroidsAVX() {
         }
         else{
             for(int j=0;j<this->D - this->D % 8;j+=8){
-                __m256 data = _mm256_load_ps(&this->centroids[i][j]);
+                __m256 tmpData = _mm256_load_ps(&this->centroids[i][j]);
                 __m256 count = _mm256_load_ps(reinterpret_cast<const float *>(&this->clusterCount[i]));
-                __m256 mean = _mm256_div_ps(data, count);
+                __m256 mean = _mm256_div_ps(tmpData, count);
                 _mm256_store_ps(&this->centroids[i][j], mean);
             }
             for(int j=this->D - this->D % 8;j<this->D;j++){
@@ -388,11 +392,11 @@ void KMeansSIMD::updateCentroidsAVX512() {
     for(int i=0;i<this->N;i++){
         int cluster = this->clusterLabels[i];
         this->clusterCount[cluster]++;
-        if(method == AVX512_UNALIGNED){
+        if(method == SIMD_AVX512_UNALIGNED){
             for(int j=0;j<this->D - this->D % 16;j+=16){
-                __m256 data = _mm256_loadu_ps(&this->data[i][j]);
+                __m256 tmpData = _mm256_loadu_ps(&this->data[i][j]);
                 __m256 centroid = _mm256_loadu_ps(&this->centroids[cluster][j]);
-                __m256 sum = _mm256_add_ps(data, centroid);
+                __m256 sum = _mm256_add_ps(tmpData, centroid);
                 _mm256_storeu_ps(&this->centroids[cluster][j], sum);
             }
             for(int j=this->D - this->D % 16;j<this->D;j++){
@@ -401,9 +405,9 @@ void KMeansSIMD::updateCentroidsAVX512() {
         }
         else{
             for(int j=0;j<this->D - this->D % 16;j+=16){
-                __m256 data = _mm256_load_ps(&this->data[i][j]);
+                __m256 tmpData = _mm256_load_ps(&this->data[i][j]);
                 __m256 centroid = _mm256_load_ps(&this->centroids[cluster][j]);
-                __m256 sum = _mm256_add_ps(data, centroid);
+                __m256 sum = _mm256_add_ps(tmpData, centroid);
                 _mm256_store_ps(&this->centroids[cluster][j], sum);
             }
             for(int j=this->D - this->D % 16;j<this->D;j++){
@@ -413,11 +417,11 @@ void KMeansSIMD::updateCentroidsAVX512() {
     }
     // calculate the mean of the cluster using AVX512
     for(int i=0;i<this->K;i++){
-        if(method == AVX512_UNALIGNED){
+        if(method == SIMD_AVX512_UNALIGNED){
             for(int j=0;j<this->D - this->D % 16;j+=16){
-                __m256 data = _mm256_loadu_ps(&this->centroids[i][j]);
+                __m256 tmpData = _mm256_loadu_ps(&this->centroids[i][j]);
                 __m256 count = _mm256_loadu_ps(reinterpret_cast<const float *>(&this->clusterCount[i]));
-                __m256 mean = _mm256_div_ps(data, count);
+                __m256 mean = _mm256_div_ps(tmpData, count);
                 _mm256_storeu_ps(&this->centroids[i][j], mean);
             }
             for(int j=this->D - this->D % 16;j<this->D;j++){
@@ -426,9 +430,9 @@ void KMeansSIMD::updateCentroidsAVX512() {
         }
         else{
             for(int j=0;j<this->D - this->D % 16;j+=16){
-                __m256 data = _mm256_load_ps(&this->centroids[i][j]);
+                __m256 tmpData = _mm256_load_ps(&this->centroids[i][j]);
                 __m256 count = _mm256_load_ps(reinterpret_cast<const float *>(&this->clusterCount[i]));
-                __m256 mean = _mm256_div_ps(data, count);
+                __m256 mean = _mm256_div_ps(tmpData, count);
                 _mm256_store_ps(&this->centroids[i][j], mean);
             }
             for(int j=this->D - this->D % 16;j<this->D;j++){

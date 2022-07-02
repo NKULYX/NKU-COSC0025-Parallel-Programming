@@ -5,37 +5,42 @@
 #ifndef FINAL_KMEANSOMP_H
 #define FINAL_KMEANSOMP_H
 
-#include <string.h>
-using namespace std;
+#include "KMeans.h"
 
-class KMeansOMP {
-    float **data;      // 数据
-    int N;         // 数据量
-    int D;         // 数据维度
-    int K;         // 聚类数量
-    int L;         // 迭代轮数
-    float **centroids; // 质心
-    int *clusterCount; // 每个数据所属的聚类
-    int *clusterLabels;  // 聚类标签
-    int method;    // 优化方法
-    void initCentroidsRandom();
-    void initCentroidsOptimize();
+#define OMP_STATIC 1
+#define OMP_DYNAMIC 2
+#define OMP_GUIDED 3
+#define OMP_SIMD 4
+#define OMP_STATIC_THREADS 5
+#define OMP_DYNAMIC_THREADS 6
+
+class KMeansOMP : public KMeans{
+    int threadNum{};
+    void calculate() override;
+    void updateCentroids() override;
+    void changeMemory() override;
     void calculateSerial();
-    void updateCentroids();
-    float calculateDistance(float*, float*);
-    void fitNormal();
-    void fitKMeansPlusPlus();
-    void fitSIMD();
-    void fitPthread();
-    void fitOMP();
+    void calculateStatic();
+    void calculateDynamic();
+    void calculateDynamicThreads();
+    void calculateStaticThreads();
+    void calculateOMPSIMD();
+    void calculateGuided();
+    float calculateDistanceSIMD(float *dataItem, float *centroidItem);
+    void updateCentroidsSerial();
+    void updateCentroidsStatic();
+    void updateCentroidsDynamic();
+    void updateCentroidsGuided();
+    void updateCentroidsOMPSIMD();
+    void updateCentroidsStaticThreads();
+    void updateCentroidsDynamicThreads();
 
 public:
-    KMeans(int K, int L, string method = "normal");
-    ~KMeans();
-    void initData(float**,int,int);
-    float** getTestData(int,int);
-    void fit();
-    void printResult();
+    explicit KMeansOMP(int k, int method = 0);
+    ~KMeansOMP();
+    void fit() override;
+    void setThreadNum(int threadNumber);
+
 };
 
 

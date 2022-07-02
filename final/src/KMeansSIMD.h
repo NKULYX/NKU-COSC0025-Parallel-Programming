@@ -7,12 +7,12 @@
 
 #include "KMeans.h"
 
-#define SSE_UNALIGNED 1
-#define SSE_ALIGNED 2
-#define AVX_UNALIGNED 3
-#define AVX_ALIGNED 4
-#define AVX512_UNALIGNED 5
-#define AVX512_ALIGNED 6
+#define SIMD_SSE_UNALIGNED 1
+#define SIMD_SSE_ALIGNED 2
+#define SIMD_AVX_UNALIGNED 3
+#define SIMD_AVX_ALIGNED 4
+#define SIMD_AVX512_UNALIGNED 5
+#define SIMD_AVX512_ALIGNED 6
 
 class KMeansSIMD : public KMeans{
     void calculate() override;
