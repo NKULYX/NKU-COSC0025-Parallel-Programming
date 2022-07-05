@@ -29,7 +29,7 @@ protected:
 
     void initCentroidsRandom();
 
-    float calculateDistance(const float *, const float *) const;
+    virtual float calculateDistance(const float *, const float *) const;
 
 public:
     explicit KMeans(int k);
