@@ -42,13 +42,15 @@ class KMeansMPI : public KMeans{
     void fitMPI_OMP();
     void fitMPI_OMP_SIMD();
     void fitSerial();
+    void calculateSerial();
     void calculateMultiThread();
     void calculateSingleThread();
-    void calculateSerial();
+    void calculatePipeline();
     void updateCentroidsSerial();
     void updateCentroidsSIMD();
     void updateCentroidsOMP();
     void updateCentroidsOMP_SIMD();
+    void updateCentroidsPipeline();
 
 public:
     explicit KMeansMPI(int k, int method = 0);

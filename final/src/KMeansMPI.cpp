@@ -399,8 +399,47 @@ void KMeansMPI::fitMPI_SLAVE_SLAVE() {
     }
 }
 
+/*
+ * the function to execute cluster process
+ * first if the process ranks 0 initial the centroids and then delivers the data and centroids  other processes
+ * if the process doesn't rank 0 then it receives the data from process 0
+ * then iterate over the loop
+ * the processes except process 0 calculate the nearest centroid of each point and send the cluster labels to process 0
+ * process 0 receives the cluster labels from processes and updates the centroids
+ * when it finishes updating one centroid, it sends the centroid to other processes,
+ * other processes receive the centroid from process 0 and immediately calculates the nearest centroid of each point
+ */
 void KMeansMPI::fitMPI_PIPELINE() {
-
+    MPI_Comm_rank(MPI_COMM_WORLD, &this->rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    this->tasks = ceil(1.0 * this->N / (size - 1));
+    /*
+     * if the process ranks 0 then it initializes the centroids and then delivers the data and centroids to other processes
+     */
+    if (this->rank == 0) {
+        initCentroidsRandom();
+        for (int i = 1; i < size; i++) {
+            int dataSize = i != this->N / tasks ? tasks : this->N % tasks;
+            MPI_Send(data[(i - 1) * this->tasks], dataSize * this->D, MPI_FLOAT, i, DATA_COMM, MPI_COMM_WORLD);
+            MPI_Send(centroids[0], this->K * this->D, MPI_FLOAT, i, CENTROID_COMM, MPI_COMM_WORLD);
+        }
+    }
+    /*
+     * if the process doesn't rank 0 then it receives the data and centroids from process 0
+     */
+    else {
+        this->tasks = this->rank == size - 1 ? this->N % tasks : tasks;
+        MPI_Recv(data[(this->rank - 1) * this->D], this->tasks * this->D, MPI_FLOAT, 0, DATA_COMM, MPI_COMM_WORLD,
+                 MPI_STATUS_IGNORE);
+    }
+    for (int l = 0; l < this->L; l++) {
+        if(this->rank != 0) {
+            calculate();
+        }
+        else{
+            updateCentroids();
+        }
+    }
 }
 
 void KMeansMPI::fitMPI_SIMD() {
@@ -434,9 +473,9 @@ void KMeansMPI::fitMPI_SIMD() {
                 MPI_Send(centroids[0], this->K * this->D, MPI_FLOAT, i, CENTROID_COMM, MPI_COMM_WORLD);
             }
         }
-            /*
-             * if the process doesn't rank 0 then it receives the centroids from process 0
-             */
+        /*
+         * if the process doesn't rank 0 then it receives the centroids from process 0
+         */
         else {
             MPI_Recv(centroids[0], this->K * this->D, MPI_FLOAT, 0, CENTROID_COMM, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
@@ -626,9 +665,27 @@ void KMeansMPI::calculate() {
         case MPI_SIMD:
             calculateSingleThread();
             break;
+        case MPI_PIPELINE:
+            calculatePipeline();
+            break;
         default:
             calculateSerial();
             break;
+    }
+}
+
+void KMeansMPI::calculateSerial() {
+    for (int i = 0; i < this->N; i++) {
+        float min = 1e9;
+        int minIndex = 0;
+        for (int k = 0; k < this->K; k++) {
+            float dis = calculateDistance(this->data[i], this->centroids[k]);
+            if (dis < min) {
+                min = dis;
+                minIndex = k;
+            }
+        }
+        this->clusterLabels[i] = minIndex;
     }
 }
 
@@ -676,19 +733,8 @@ void KMeansMPI::calculateSingleThread() {
     }
 }
 
-void KMeansMPI::calculateSerial() {
-    for (int i = 0; i < this->N; i++) {
-        float min = 1e9;
-        int minIndex = 0;
-        for (int k = 0; k < this->K; k++) {
-            float dis = calculateDistance(this->data[i], this->centroids[k]);
-            if (dis < min) {
-                min = dis;
-                minIndex = k;
-            }
-        }
-        this->clusterLabels[i] = minIndex;
-    }
+void KMeansMPI::calculatePipeline() {
+
 }
 
 float KMeansMPI::calculateDistance(const float *dataItem, const float *centroidItem) const {
@@ -754,6 +800,9 @@ void KMeansMPI::updateCentroids() {
             break;
         case MPI_OMP_SIMD:
             updateCentroidsOMP_SIMD();
+            break;
+        case MPI_PIPELINE:
+            updateCentroidsPipeline();
             break;
     }
 }
@@ -887,4 +936,8 @@ void KMeansMPI::updateCentroidsOMP_SIMD() {
             }
         }
     }
+}
+
+void KMeansMPI::updateCentroidsPipeline() {
+
 }
