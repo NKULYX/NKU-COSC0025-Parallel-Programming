@@ -5,7 +5,7 @@
 #include <iostream>
 #include <vector>
 #include "KMeansSerial.h"
-#include "KMeansOMP.h"
+#include "arm/KMeansOMP.h"
 #include "TestUtil.h"
 
 using namespace std;

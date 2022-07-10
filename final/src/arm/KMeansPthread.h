@@ -26,13 +26,16 @@ class KMeansPthread : public KMeans{
     sem_t sem{};
     pthread_barrier_t barrier{};
     pthread_mutex_t lock{};
+    int taskIndex = 0;
+    int taskNum = 4;
     void calculate() override;
     void updateCentroids() override;
     void changeMemory() override;
-    static void* threadFuncStaticDiv(void* param);
-    static void* threadFuncDynamicDiv(void* param);
-    static void* threadFuncStaticSIMD(void* param);
-    static void* threadFuncDynamicSIMD(void* param);
+    void* threadFuncStaticDiv(void* param);
+    void* threadFuncDynamicDiv(void* param);
+    void* threadFuncStaticSIMD(void* param);
+    void* threadFuncDynamicSIMD(void* param);
+    float calculateDistanceSIMD(float* dataItem, float* centroidItem);
 
 public:
     explicit KMeansPthread(int k, int mehtod = 0);
@@ -41,6 +44,10 @@ public:
     void setThreadNum(int threadNumber);
 
     void initThread();
+
+    void updateCentroidsSerial();
+
+    void updateCentroidsSIMD();
 };
 
 

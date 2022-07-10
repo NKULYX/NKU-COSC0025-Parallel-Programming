@@ -77,9 +77,9 @@ void KMeansSIMD::changeMemory() {
  */
 void KMeansSIMD::calculate() {
     switch (method) {
-        case SIMD_SSE_UNALIGNED:
-        case SIMD_SSE_ALIGNED:
-            calculateSSE();
+        case SIMD_UNALIGNED:
+        case SIMD_ALIGNED:
+            calculateSIMD();
             break;
         case SIMD_AVX_UNALIGNED:
         case SIMD_AVX_ALIGNED:
@@ -97,12 +97,12 @@ void KMeansSIMD::calculate() {
 /*
  * calculate the nearest centroid of each point using SSE
  */
-void KMeansSIMD::calculateSSE() {
+void KMeansSIMD::calculateSIMD() {
     for (int i = 0; i < this->N; i++) {
         float min = 1e9;
         int minIndex = 0;
         for (int k = 0; k < this->K; k++) {
-            float dis = calculateDistanceSSE(this->data[i], this->centroids[k]);
+            float dis = calculateDistanceSIMD(this->data[i], this->centroids[k]);
             if (dis < min) {
                 min = dis;
                 minIndex = k;
@@ -115,11 +115,11 @@ void KMeansSIMD::calculateSSE() {
 /*
  * calculate the distance between two points using SSE
  */
-float KMeansSIMD::calculateDistanceSSE(float *dataItem, float *centroidItem) {
+float KMeansSIMD::calculateDistanceSIMD(float *dataItem, float *centroidItem) {
     float dis = 0;
     for(int i = 0; i < this->D - this->D % 4; i+=4) {
         __m128 tmpData, centroid;
-        if(this->method == SIMD_SSE_UNALIGNED){
+        if(this->method == SIMD_UNALIGNED){
             tmpData = _mm_loadu_ps(&dataItem[i]);
             centroid = _mm_loadu_ps(&centroidItem[i]);
         }
@@ -245,9 +245,9 @@ float KMeansSIMD::calculateDistanceAVX512(float *dataItem, float *centroidItem) 
  */
 void KMeansSIMD::updateCentroids() {
     switch (method) {
-        case SIMD_SSE_UNALIGNED:
-        case SIMD_SSE_ALIGNED:
-            updateCentroidsSSE();
+        case SIMD_UNALIGNED:
+        case SIMD_ALIGNED:
+            updateCentroidsSIMD();
             break;
         case SIMD_AVX_UNALIGNED:
         case SIMD_AVX_ALIGNED:
@@ -265,14 +265,14 @@ void KMeansSIMD::updateCentroids() {
 /*
  * update the centroids using SSE
  */
-void KMeansSIMD::updateCentroidsSSE() {
+void KMeansSIMD::updateCentroidsSIMD() {
     // initialize the number of each cluster as 0
     memset(this->clusterCount, 0, sizeof(int) * K);
     // accumulate the data of each dimension in the cluster using SSE
     for(int i=0;i<this->N;i++){
         int cluster = this->clusterLabels[i];
         this->clusterCount[cluster]++;
-        if(method == SIMD_SSE_UNALIGNED){
+        if(method == SIMD_UNALIGNED){
             for(int j=0;j<this->D - this->D % 4;j+=4){
                 __m128 tmpData = _mm_loadu_ps(&this->data[i][j]);
                 __m128 centroid = _mm_loadu_ps(&this->centroids[cluster][j]);
@@ -297,7 +297,7 @@ void KMeansSIMD::updateCentroidsSSE() {
     }
     // calculate the mean of the cluster using SSE
     for(int i=0;i<this->K;i++){
-        if(method == SIMD_SSE_UNALIGNED){
+        if(method == SIMD_UNALIGNED){
             for(int j=0;j<this->D - this->D % 4;j+=4){
                 __m128 tmpData = _mm_loadu_ps(&this->centroids[i][j]);
                 __m128 count = _mm_loadu_ps(reinterpret_cast<const float *>(&this->clusterCount[i]));

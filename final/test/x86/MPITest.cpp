@@ -6,7 +6,7 @@
 #include <vector>
 #include <mpi.h>
 #include "KMeansSerial.h"
-#include "KMeansMPI.h"
+#include "x86/KMeansMPI.h"
 #include "TestUtil.h"
 
 using namespace std;

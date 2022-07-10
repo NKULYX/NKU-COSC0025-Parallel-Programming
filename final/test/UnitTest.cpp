@@ -3,9 +3,9 @@
 //
 
 #include "KMeansSerial.h"
-#include "KMeansSIMD.h"
-#include "KMeansPthread.h"
-#include "KMeansOMP.h"
+#include "x86/KMeansSIMD.h"
+#include "x86/KMeansPthread.h"
+#include "x86/KMeansOMP.h"
 #include "TestUtil.h"
 
 using namespace std;
